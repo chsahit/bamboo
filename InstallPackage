@@ -1,0 +1,71 @@
+#!/bin/bash
+
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+sudo apt install build-essential cmake git libpoco-dev libeigen3-dev -y
+
+# Clone libfranka to the project root
+cd "$SCRIPT_DIR"
+git clone --recurse-submodules https://github.com/frankaemika/libfranka
+cd libfranka
+
+echo "Which libfranka version are you going to use? (currently supporting 0.14.0, but 0.13.0 should work as well)"
+read version
+
+git checkout ${version}
+git submodule update
+
+# Install Pinocchio if not already installed
+if ! dpkg -l | grep -q "robotpkg-pinocchio"; then
+    echo "Pinocchio not found. Installing..."
+
+    # Setup keyring if not already present
+    if [ ! -f /etc/apt/keyrings/robotpkg.asc ]; then
+        echo "Setting up robotpkg keyring..."
+        sudo mkdir -p /etc/apt/keyrings
+        curl http://robotpkg.openrobots.org/packages/debian/robotpkg.asc \
+            | sudo tee /etc/apt/keyrings/robotpkg.asc > /dev/null
+    else
+        echo "Robotpkg keyring already exists."
+    fi
+
+    # Add repository if not already present
+    if [ ! -f /etc/apt/sources.list.d/robotpkg.list ]; then
+        echo "Adding robotpkg repository..."
+        echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/robotpkg.asc] http://robotpkg.openrobots.org/packages/debian/pub $(lsb_release -cs) robotpkg" \
+            | sudo tee /etc/apt/sources.list.d/robotpkg.list > /dev/null
+    else
+        echo "Robotpkg repository already configured."
+    fi
+
+    # Update and install Pinocchio
+    sudo apt-get update
+    sudo apt-get install -y robotpkg-pinocchio
+else
+    echo "Pinocchio is already installed."
+fi
+
+mkdir -p build
+cd build
+
+# Install to bamboo/install (one level up from libfranka)
+cmake .. -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/opt/openrobots/lib/cmake
+make -j$(nproc)
+make install
+
+# Get absolute path of the install directory
+INSTALL_LIB_PATH="$SCRIPT_DIR/install/lib"
+
+echo "Libraries installed to: $INSTALL_LIB_PATH"
+
+# Add to bashrc if not already present
+if ! grep -q "$INSTALL_LIB_PATH" "$HOME/.bashrc"; then
+    echo "" >> "$HOME/.bashrc"
+    echo "# Added by libfranka InstallPackage script" >> "$HOME/.bashrc"
+    echo "export LD_LIBRARY_PATH=\"$INSTALL_LIB_PATH:\$LD_LIBRARY_PATH\"" >> "$HOME/.bashrc"
+    echo "Added LD_LIBRARY_PATH to ~/.bashrc"
+    echo "Run 'source ~/.bashrc' or restart your terminal for changes to take effect"
+else
+    echo "LD_LIBRARY_PATH already configured in ~/.bashrc"
+fi
