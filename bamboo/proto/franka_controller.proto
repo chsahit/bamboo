@@ -1,0 +1,185 @@
+syntax = 'proto3';
+import "google/protobuf/any.proto";
+
+// Goal specification for joint space control
+
+message JointGoal {
+  bool is_delta = 1;
+  double q1 = 2;
+  double q2 = 3;
+  double q3 = 4;
+  double q4 = 5;
+  double q5 = 6;
+  double q6 = 7;
+  double q7 = 8;
+}
+
+// Goal specification for task space control
+
+message Goal {
+  bool is_delta = 1;
+  double x = 2;
+  double y = 3;
+  double z = 4;
+
+  double ax = 5;
+  double ay = 6;
+  double az = 7;
+}
+
+// Franka State Estimator Configuration
+
+message ExponentialSmoothingConfig {
+  double alpha_q = 1;
+  double alpha_dq = 2;
+  double alpha_eef = 3;
+  double alpha_eef_vel = 4;
+}
+
+message FrankaStateEstimatorMessage {
+  bool is_estimation = 1;
+  enum EstimatorType {
+    NO_ESTIMATOR = 0;
+    EXPONENTIAL_SMOOTHING_ESTIMATOR = 1;
+  }
+  EstimatorType estimator_type = 2;
+  google.protobuf.Any config = 5;
+}
+
+// Franka OSC Controller Configuration
+
+message FrankaOSCControllerConfig {
+  repeated double residual_mass_vec = 1; // The manual residual mass matrix to add on the internal mass matrix
+  repeated double residual_tau_translation_vec = 2; // The manual translational force applied to the tau
+  repeated double residual_tau_rotation_vec = 3; // The manual residual rotational force applied to the tau
+  double coriolis_stiffness = 4;
+  double nullspace_stiffness = 5;
+  repeated double nullspace_static_q = 6;
+  repeated double joint_limits_avoidance = 7;
+  repeated double joint_tau_limits = 8;
+  bool use_diff_ik = 9;
+  repeated double diff_ik_kp = 10;
+  repeated double diff_ik_kd = 11;
+}
+
+message FrankaJointImpedanceConfig {
+  bool enable_residual_tau = 1;
+  repeated double residual_tau_translation_vec = 2;
+  repeated double residual_tau_rotation_vec = 3;
+}
+
+// Franka Gripper control messages
+
+message FrankaGripperHomingMessage { bool homing = 1; }
+
+message FrankaGripperMoveMessage {
+  double width = 1;
+  double speed = 2;
+}
+
+message FrankaGripperStopMessage { bool stop = 1; }
+
+message FrankaGripperGraspMessage {
+  double width = 1;
+  double speed = 2;
+  double force = 3;
+  double epsilon_inner = 4;
+  double epsilon_outer = 5;
+}
+
+// Unified message interface for gripper control
+
+message FrankaGripperControlMessage {
+  bool termination = 1;
+  google.protobuf.Any control_msg = 2;
+}
+
+// Arm control messages
+
+message FrankaDummyControllerMessage {
+  Goal goal = 1;
+  bool termination = 2;
+}
+
+message FrankaOSCPoseControllerMessage {
+  Goal goal = 1;
+  repeated double translational_stiffness = 2;
+  repeated double rotational_stiffness = 3;
+  repeated double translational_damping = 4;
+  repeated double rotational_damping = 5;
+  bool termination = 6;
+  FrankaOSCControllerConfig config = 7;
+}
+
+message FrankaJointPositionControllerMessage {
+  JointGoal goal = 1;
+  double kp_gains = 2;
+  double kd_gains = 3;
+  double speed_factor = 4;
+  repeated double joint_tau_limits = 5;
+}
+
+message FrankaJointImpedanceControllerMessage {
+  JointGoal goal = 1;
+  repeated double kp = 2;
+  repeated double kd = 3;
+  repeated double joint_tau_limits = 4;
+  FrankaJointImpedanceConfig config = 5;
+}
+
+message FrankaCartesianVelocityControllerMessage {
+  Goal goal = 1;
+  double kp_gains = 2;
+  double kd_gains = 3;
+  double speed_factor=4;
+}
+
+// TODO(Yifeng) Placeholder for now
+
+message FrankaJointVelocityControllerMessage {
+  JointGoal goal = 1;
+  double kp_gains = 2;
+  double kd_gains = 3;
+}
+
+// TODO(Yifeng) Placeholder for now
+
+message FrankaJointTorqueControllerMessage {
+  JointGoal goal = 1;
+  double kp_gains = 2;
+  double kd_gains = 3;
+}
+
+// Unified message interface for arm control
+message FrankaControlMessage {
+  bool termination = 1;
+  enum ControllerType {
+    NO_CONTROL = 0;
+    OSC_POSE = 1;
+    OSC_POSITION = 2;
+    JOINT_POSITION = 3;
+    JOINT_IMPEDANCE = 4;
+    JOINT_VELOCITY = 5;
+    TORQUE = 6;
+    OSC_YAW = 7;
+    CARTESIAN_VELOCITY = 8;
+  }
+  ControllerType controller_type = 2;
+  enum TrajInterpolatorType {
+    NO_OP = 0;
+    LINEAR_POSITION = 1;
+    LINEAR_POSE = 2;
+    MIN_JERK_POSE = 3;
+    SMOOTH_JOINT_POSITION = 4;
+    MIN_JERK_JOINT_POSITION = 5;
+    LINEAR_JOINT_POSITION = 6;
+    COSINE_CARTESIAN_VELOCITY = 7;
+    LINEAR_CARTESIAN_VELOCITY = 8;
+    LINEAR_JOINT_VELOCITY = 9;
+  }
+  TrajInterpolatorType traj_interpolator_type = 3;
+  double traj_interpolator_time_fraction = 4;
+  google.protobuf.Any control_msg = 5;
+  double timeout = 6;
+  FrankaStateEstimatorMessage state_estimator_msg = 7;
+}

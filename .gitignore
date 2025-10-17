@@ -1,2 +1,5 @@
 install/
 libfranka/
+deoxys_control/
+minimal_joint_impedance/build/
+bamboo/build/
