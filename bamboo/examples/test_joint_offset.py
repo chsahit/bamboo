@@ -91,7 +91,7 @@ def main():
     print()
 
     # Compute goal: current + 0.1 radians
-    goal_joints = current_joints + 0.1
+    goal_joints = current_joints + 0.35
 
     print(f"Goal joints: {goal_joints}")
     print()
