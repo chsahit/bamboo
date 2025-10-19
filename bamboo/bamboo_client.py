@@ -38,12 +38,21 @@ class BambooFrankaClient:
         self.state_port = control_port + 1
         self.server_ip = server_ip
 
-        # Set up ZMQ context and state subscriber
+        # Set up ZMQ context and sockets
         self.context = zmq.Context()
+
+        # State subscriber (for receiving robot state)
         self.state_sub = self.context.socket(zmq.SUB)
         self.state_sub.connect(f"tcp://{self.server_ip}:{self.state_port}")
         self.state_sub.setsockopt(zmq.SUBSCRIBE, b"")  # Subscribe to all messages
         self.state_sub.setsockopt(zmq.RCVTIMEO, 1000)  # 1 second timeout
+
+        # Command publisher (for sending commands to control node)
+        self.cmd_pub = self.context.socket(zmq.PUB)
+        self.cmd_pub.connect(f"tcp://{self.server_ip}:{self.control_port}")
+
+        # Give publisher time to connect
+        time.sleep(0.1)
 
         # Test connection by trying to receive a state message
         self._test_connection()
@@ -128,6 +137,8 @@ class BambooFrankaClient:
         """Clean up ZMQ resources."""
         if hasattr(self, 'state_sub'):
             self.state_sub.close()
+        if hasattr(self, 'cmd_pub'):
+            self.cmd_pub.close()
         if hasattr(self, 'context'):
             self.context.term()
 
@@ -141,6 +152,87 @@ class BambooFrankaClient:
 
     def get_joint_positions(self) -> list[float]:
         return self.get_joint_states()["qpos"]
+
+    def _send_joint_impedance_command(self, joint_positions: list, gripper_open: bool = True):
+        """Send a single joint impedance command to the control node.
+
+        Args:
+            joint_positions: List of 7 joint positions
+            gripper_open: Whether gripper should be open (ignored for now)
+
+        Raises:
+            RuntimeError: If command sending fails
+        """
+        try:
+            # Create joint impedance control message
+            ji_msg = franka_controller_pb2.FrankaJointImpedanceControllerMessage()
+
+            # Set goal joint positions
+            goal = ji_msg.goal
+            goal.is_delta = False  # Absolute positions
+            goal.q1 = joint_positions[0]
+            goal.q2 = joint_positions[1]
+            goal.q3 = joint_positions[2]
+            goal.q4 = joint_positions[3]
+            goal.q5 = joint_positions[4]
+            goal.q6 = joint_positions[5]
+            goal.q7 = joint_positions[6]
+
+            # Set default impedance parameters (matching deoxys defaults)
+            for i in range(7):
+                ji_msg.kp.append(600.0)  # Default stiffness
+                ji_msg.kd.append(50.0)   # Default damping
+
+            # Create main control message
+            control_msg = franka_controller_pb2.FrankaControlMessage()
+            control_msg.termination = False
+            control_msg.controller_type = franka_controller_pb2.FrankaControlMessage.JOINT_IMPEDANCE
+            control_msg.traj_interpolator_type = franka_controller_pb2.FrankaControlMessage.MIN_JERK_JOINT_POSITION
+            control_msg.traj_interpolator_time_fraction = 0.1  # 10% of trajectory time for interpolation
+            control_msg.timeout = 10.0
+
+            # Pack the joint impedance message
+            control_msg.control_msg.Pack(ji_msg)
+
+            # Serialize and send
+            msg_data = control_msg.SerializeToString()
+            self.cmd_pub.send(msg_data)
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to send joint impedance command: {e}")
+
+    def execute_joint_impedance_path(self, joint_confs: list, gripper_isopen=True) -> dict:
+        """Execute joint impedance trajectory.
+
+        Args:
+            joint_confs: List of joint configurations (7 values each)
+            gripper_isopen: Bool or list of bools for gripper state (ignored for now)
+
+        Returns:
+            Dict with 'success' (bool) and 'error' (str) if failed
+        """
+        try:
+            logging.info(f'Executing {len(joint_confs)} joint waypoints')
+
+            # Send each joint configuration as a command
+            for i, joint_conf in enumerate(joint_confs):
+                if len(joint_conf) != 7:
+                    raise ValueError(f"Joint configuration {i} must have 7 values, got {len(joint_conf)}")
+
+                # Determine gripper state for this waypoint
+                if isinstance(gripper_isopen, list):
+                    gripper_open = gripper_isopen[i] if i < len(gripper_isopen) else gripper_isopen[-1]
+                else:
+                    gripper_open = gripper_isopen
+
+                # Send command to control node
+                self._send_joint_impedance_command(joint_conf, gripper_open)
+
+            return {"success": True}
+
+        except Exception as e:
+            logging.error(f"Error in execute_joint_impedance_path: {e}")
+            return {"success": False, "error": str(e)}
 
 
 def main():
