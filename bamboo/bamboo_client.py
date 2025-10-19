@@ -139,6 +139,9 @@ class BambooFrankaClient:
         """Context manager exit."""
         self.close()
 
+    def get_joint_positions(self) -> list[float]:
+        return self.get_joint_states()["qpos"]
+
 
 def main():
     """Simple test of the BambooFrankaClient."""
