@@ -184,6 +184,11 @@ message FrankaControlMessage {
   FrankaStateEstimatorMessage state_estimator_msg = 7;
 }
 
+// Command completion response message
+message FrankaCommandResponse {
+  bool success = 1;
+}
+
 // Robot state response message
 message FrankaRobotStateMessage {
   repeated double O_T_EE = 1;

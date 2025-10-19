@@ -98,6 +98,12 @@ int main(int argc, char** argv) {
         zmq_state_pub.bind("tcp://*:" + state_pub_port);
         std::cout << "Robot state publisher on port: " << state_pub_port << std::endl;
 
+        // Command response publisher - publishes on port+2
+        zmq::socket_t zmq_response_pub(zmq_context, ZMQ_PUB);
+        std::string response_pub_port = std::to_string(std::stoi(zmq_port) + 2);
+        zmq_response_pub.bind("tcp://*:" + response_pub_port);
+        std::cout << "Command response publisher on port: " << response_pub_port << std::endl;
+
         // Connect to robot
         std::cout << "Connecting to robot..." << std::endl;
         franka::Robot robot(robot_ip);
@@ -133,6 +139,7 @@ int main(int argc, char** argv) {
         std::atomic_bool termination{false};
         double control_time = 0.0;
         int no_msg_counter = 0;
+        bool trajectory_completed = false;
 
         // State publisher rate (like deoxys)
         const int state_pub_rate = 100;  // Hz
@@ -222,6 +229,9 @@ int main(int argc, char** argv) {
 
                 std::cout << "New goal received: " << goal_q.transpose() << std::endl;
 
+                // Reset completion flag
+                trajectory_completed = false;
+
                 // Reset interpolator (based on deoxys line 543-546)
                 interpolator.Reset(
                     control_time,
@@ -260,7 +270,7 @@ int main(int argc, char** argv) {
 
                 // Get interpolated desired position
                 Eigen::Matrix<double, 7, 1> desired_q;
-                interpolator.GetNextStep(control_time, desired_q);
+                bool interpolation_finished = interpolator.GetNextStep(control_time, desired_q);
 
                 // Compute control torques
                 std::array<double, 7> tau_d = controller.Step(robot_state, desired_q);
@@ -269,8 +279,11 @@ int main(int argc, char** argv) {
                 std::array<double, 7> tau_d_rate_limited =
                     franka::limitRate(franka::kMaxTorqueRate, tau_d, robot_state.tau_J_d);
 
-                // Check if we should stop (no running flag, close to goal, or shutdown signal)
-                if (!running || global_shutdown) {
+                // Check if interpolation is finished or we should stop
+                if (interpolation_finished || !running || global_shutdown) {
+                    if (interpolation_finished) {
+                        trajectory_completed = true;
+                    }
                     return franka::MotionFinished(franka::Torques(tau_d_rate_limited));
                 }
 
@@ -281,8 +294,33 @@ int main(int argc, char** argv) {
             try {
                 robot.control(control_callback);
                 std::cout << "Control motion completed. Ready for new commands..." << std::endl;
+
+                // Send completion message
+                FrankaCommandResponse response;
+                response.set_success(trajectory_completed);
+
+                // Serialize and publish response
+                std::string response_str;
+                response.SerializeToString(&response_str);
+                zmq::message_t response_zmq_msg(response_str.size());
+                memcpy(response_zmq_msg.data(), response_str.c_str(), response_str.size());
+                zmq_response_pub.send(response_zmq_msg, zmq::send_flags::dontwait);
+
+                std::cout << "Sent completion message: " << (trajectory_completed ? "success" : "interrupted") << std::endl;
             } catch (const franka::ControlException& e) {
                 std::cerr << "Control exception: " << e.what() << std::endl;
+
+                // Send error response
+                FrankaCommandResponse response;
+                response.set_success(false);
+
+                std::string response_str;
+                response.SerializeToString(&response_str);
+                zmq::message_t response_zmq_msg(response_str.size());
+                memcpy(response_zmq_msg.data(), response_str.c_str(), response_str.size());
+                zmq_response_pub.send(response_zmq_msg, zmq::send_flags::dontwait);
+
+                std::cout << "Sent error completion message" << std::endl;
                 running = false;
             }
 

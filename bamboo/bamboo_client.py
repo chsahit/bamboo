@@ -29,7 +29,7 @@ class BambooFrankaClient:
     """Client for communicating with the bamboo control node."""
 
     def __init__(self, control_port: int = 5556, server_ip: str = "localhost",
-                 gripper_port: int = 5558, enable_gripper: bool = True):
+                 gripper_port: int = 5559, enable_gripper: bool = True):
         """Initialize Bamboo Franka Client.
 
         Args:
@@ -40,6 +40,7 @@ class BambooFrankaClient:
         """
         self.control_port = control_port
         self.state_port = control_port + 1
+        self.response_port = control_port + 2
         self.server_ip = server_ip
 
         # Set up ZMQ context and sockets
@@ -54,6 +55,12 @@ class BambooFrankaClient:
         # Command publisher (for sending commands to control node)
         self.cmd_pub = self.context.socket(zmq.PUB)
         self.cmd_pub.connect(f"tcp://{self.server_ip}:{self.control_port}")
+
+        # Response subscriber (for receiving command completion notifications)
+        self.response_sub = self.context.socket(zmq.SUB)
+        self.response_sub.connect(f"tcp://{self.server_ip}:{self.response_port}")
+        self.response_sub.setsockopt(zmq.SUBSCRIBE, b"")  # Subscribe to all messages
+        self.response_sub.setsockopt(zmq.RCVTIMEO, 1000)  # 1 second timeout
 
         # Give publisher time to connect
         time.sleep(0.1)
@@ -165,6 +172,8 @@ class BambooFrankaClient:
             self.state_sub.close()
         if hasattr(self, 'cmd_pub'):
             self.cmd_pub.close()
+        if hasattr(self, 'response_sub'):
+            self.response_sub.close()
         if hasattr(self, 'gripper_socket') and self.gripper_socket is not None:
             self.gripper_socket.close()
         if hasattr(self, 'context'):
@@ -259,8 +268,42 @@ class BambooFrankaClient:
         except Exception as e:
             raise RuntimeError(f"Failed to send joint impedance command: {e}")
 
+    def _wait_for_trajectory_completion(self, timeout: float = 30.0) -> dict:
+        """Wait for trajectory completion response.
+
+        Args:
+            timeout: Maximum time to wait in seconds
+
+        Returns:
+            Dict with completion response or timeout error
+        """
+        start_time = time.time()
+
+        while time.time() - start_time < timeout:
+            try:
+                # Try to receive a response message
+                response_data = self.response_sub.recv(zmq.NOBLOCK)
+
+                # Parse protobuf message
+                response_msg = franka_controller_pb2.FrankaCommandResponse()
+                response_msg.ParseFromString(response_data)
+
+                # Return the success status
+                return {"success": response_msg.success}
+
+            except zmq.Again:
+                # No message received, continue waiting
+                time.sleep(0.01)
+                continue
+
+        # Timeout
+        return {
+            "success": False,
+            "error": "Timeout waiting for trajectory completion"
+        }
+
     def execute_joint_impedance_path(self, joint_confs: list, gripper_isopen=True) -> dict:
-        """Execute joint impedance trajectory.
+        """Execute joint impedance trajectory and wait for completion.
 
         Args:
             joint_confs: List of joint configurations (7 values each)
@@ -286,7 +329,16 @@ class BambooFrankaClient:
                 # Send command to control node
                 self._send_joint_impedance_command(joint_conf, gripper_open)
 
-            return {"success": True}
+            # Wait for the last trajectory to complete
+            logging.info("Waiting for trajectory completion...")
+            result = self._wait_for_trajectory_completion()
+
+            if result["success"]:
+                logging.info("Trajectory completed successfully")
+            else:
+                logging.error(f"Trajectory failed: {result.get('error', 'Unknown error')}")
+
+            return result
 
         except Exception as e:
             logging.error(f"Error in execute_joint_impedance_path: {e}")

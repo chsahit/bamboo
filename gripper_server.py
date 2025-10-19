@@ -53,6 +53,7 @@ class GripperServer:
         """
         try:
             action = command.get('action')
+            print(f"{action=}")
 
             if action == 'open':
                 speed = command.get('speed', 0.05)
@@ -91,6 +92,7 @@ class GripperServer:
                 # Wait for request (with timeout)
                 try:
                     message = self.socket.recv_string(zmq.NOBLOCK)
+                    print("MESSAGE RECEIVED")
 
                     # Parse command
                     try:
@@ -98,6 +100,7 @@ class GripperServer:
                     except json.JSONDecodeError:
                         response = {"success": False, "error": "Invalid JSON"}
                     else:
+                        print(f"{command=}")
                         response = self.handle_command(command)
 
                     # Send response
