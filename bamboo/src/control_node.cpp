@@ -140,9 +140,10 @@ int main(int argc, char** argv) {
         double control_time = 0.0;
         int no_msg_counter = 0;
         bool trajectory_completed = false;
+        bool response_sent = false;  // Track if response was already sent for current motion
 
         // State publisher rate (like deoxys)
-        const int state_pub_rate = 100;  // Hz
+        const int state_pub_rate = 1;  // Hz - reduced from 100Hz to reduce interference
 
         // State publisher thread - continuously publishes robot state like deoxys
         std::thread state_pub_thread([&]() {
@@ -188,9 +189,23 @@ int main(int argc, char** argv) {
                     if (running) {
                         no_msg_counter++;
                         if (no_msg_counter >= 20) {
-                            std::cout << "No messages received for 20 steps, stopping current motion (waiting for new commands)" << std::endl;
+                            // No messages received, stopping motion (removed verbose output to reduce jitter)
                             running = false;
                             // DON'T set termination = true, keep waiting for new commands
+
+                            // Send response when motion stops due to timeout (only if not already sent)
+                            if (!response_sent) {
+                                FrankaCommandResponse response;
+                                response.set_success(false);  // Timeout, not successful completion
+
+                                std::string response_str;
+                                response.SerializeToString(&response_str);
+                                zmq::message_t response_zmq_msg(response_str.size());
+                                memcpy(response_zmq_msg.data(), response_str.c_str(), response_str.size());
+                                zmq_response_pub.send(response_zmq_msg, zmq::send_flags::dontwait);
+
+                                response_sent = true;
+                            }
                         }
                     }
                     continue;
@@ -227,10 +242,11 @@ int main(int argc, char** argv) {
                          ji_msg.goal().q4(), ji_msg.goal().q5(), ji_msg.goal().q6(),
                          ji_msg.goal().q7();
 
-                std::cout << "New goal received: " << goal_q.transpose() << std::endl;
+                // Goal received (removed verbose output to reduce jitter)
 
                 // Reset completion flag
                 trajectory_completed = false;
+                response_sent = false;  // Reset response flag for new motion
 
                 // Reset interpolator (based on deoxys line 543-546)
                 interpolator.Reset(
@@ -293,34 +309,40 @@ int main(int argc, char** argv) {
             // Execute control
             try {
                 robot.control(control_callback);
-                std::cout << "Control motion completed. Ready for new commands..." << std::endl;
+                // Control motion completed (removed verbose output to reduce jitter)
 
-                // Send completion message
-                FrankaCommandResponse response;
-                response.set_success(trajectory_completed);
+                // Send completion message only if not already sent
+                if (!response_sent) {
+                    FrankaCommandResponse response;
+                    response.set_success(trajectory_completed);
 
-                // Serialize and publish response
-                std::string response_str;
-                response.SerializeToString(&response_str);
-                zmq::message_t response_zmq_msg(response_str.size());
-                memcpy(response_zmq_msg.data(), response_str.c_str(), response_str.size());
-                zmq_response_pub.send(response_zmq_msg, zmq::send_flags::dontwait);
+                    // Serialize and publish response
+                    std::string response_str;
+                    response.SerializeToString(&response_str);
+                    zmq::message_t response_zmq_msg(response_str.size());
+                    memcpy(response_zmq_msg.data(), response_str.c_str(), response_str.size());
+                    zmq_response_pub.send(response_zmq_msg, zmq::send_flags::dontwait);
 
-                std::cout << "Sent completion message: " << (trajectory_completed ? "success" : "interrupted") << std::endl;
+                    response_sent = true;
+                    // Completion message sent (removed verbose output to reduce jitter)
+                }
             } catch (const franka::ControlException& e) {
                 std::cerr << "Control exception: " << e.what() << std::endl;
 
-                // Send error response
-                FrankaCommandResponse response;
-                response.set_success(false);
+                // Send error response only if not already sent
+                if (!response_sent) {
+                    FrankaCommandResponse response;
+                    response.set_success(false);
 
-                std::string response_str;
-                response.SerializeToString(&response_str);
-                zmq::message_t response_zmq_msg(response_str.size());
-                memcpy(response_zmq_msg.data(), response_str.c_str(), response_str.size());
-                zmq_response_pub.send(response_zmq_msg, zmq::send_flags::dontwait);
+                    std::string response_str;
+                    response.SerializeToString(&response_str);
+                    zmq::message_t response_zmq_msg(response_str.size());
+                    memcpy(response_zmq_msg.data(), response_str.c_str(), response_str.size());
+                    zmq_response_pub.send(response_zmq_msg, zmq::send_flags::dontwait);
 
-                std::cout << "Sent error completion message" << std::endl;
+                    response_sent = true;
+                    std::cout << "Sent error completion message" << std::endl;
+                }
                 running = false;
             }
 
