@@ -2,11 +2,11 @@ cmake_minimum_required(VERSION 3.10)
 project(bamboo)
 
 # Set C++ standard
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Set path to locally built libfranka
-set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/../libfranka/build")
+# Set path to locally built libfranka and our install directory
+set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../libfranka/build" ${CMAKE_PREFIX_PATH})
 
 # Set RPATH so the executable can find libfranka.so at runtime
 set(CMAKE_INSTALL_RPATH "${CMAKE_CURRENT_SOURCE_DIR}/../libfranka/build")
@@ -15,8 +15,16 @@ set(CMAKE_BUILD_RPATH "${CMAKE_CURRENT_SOURCE_DIR}/../libfranka/build")
 # Find required packages
 find_package(Franka REQUIRED)
 find_package(Eigen3 REQUIRED)
+
+# Force use of our local protobuf installation ONLY
+set(Protobuf_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../install")
+set(Protobuf_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../install/include")
+set(Protobuf_LIBRARY "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libprotobuf.a")
+set(Protobuf_PROTOC_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/../install/bin/protoc")
 find_package(Protobuf REQUIRED)
-find_package(cppzmq REQUIRED)
+# Find zmqpp manually since we built it locally
+find_library(ZMQPP_LIBRARY zmqpp PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib" REQUIRED)
+find_path(ZMQPP_INCLUDE_DIR zmqpp/zmqpp.hpp PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../install/include" REQUIRED)
 
 # Generate protobuf files
 set(PROTO_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/proto")
@@ -45,12 +53,13 @@ foreach(PROTO_FILE ${PROTO_FILES})
     list(APPEND PROTO_HDRS ${PROTO_HDR})
 endforeach()
 
-# Include directories
+# Include directories - prioritize our local protobuf
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_BINARY_DIR}/proto_generated
+    "${CMAKE_CURRENT_SOURCE_DIR}/../install/include"  # Our protobuf headers FIRST
     ${EIGEN3_INCLUDE_DIRS}
-    ${PROTOBUF_INCLUDE_DIRS}
+    ${ZMQPP_INCLUDE_DIR}
 )
 
 # Create library for controllers
@@ -70,12 +79,36 @@ add_executable(bamboo_control_node
     src/control_node.cpp
 )
 
+# Collect all local libraries needed
+file(GLOB ABSL_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libabsl_*.a")
+set(UTF8_RANGE_LIB "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libutf8_range.a")
+set(UPB_LIB "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libupb.a")
+# Add specific debugging libraries for missing symbols
+set(DEBUGGING_LIBS
+    "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libabsl_debugging_internal.a"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libabsl_demangle_internal.a"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libabsl_demangle_rust.a"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libabsl_decode_rust_punycode.a"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libabsl_utf8_for_code_point.a"
+)
+
 target_link_libraries(bamboo_control_node
     bamboo_controllers
     Franka::Franka
     Eigen3::Eigen
-    ${PROTOBUF_LIBRARIES}
-    cppzmq
+    ${Protobuf_LIBRARY}  # Use our specific protobuf library
+    ${ZMQPP_LIBRARY}
+    zmq
+    # Add Pinocchio libraries that libfranka depends on
+    /opt/openrobots/lib/libpinocchio_default.so
+    /opt/openrobots/lib/libpinocchio_parsers.so
+    # Add all absl libraries for our protobuf - link twice to resolve circular deps
+    ${DEBUGGING_LIBS}
+    ${ABSL_LIBS}
+    ${UTF8_RANGE_LIB}
+    ${UPB_LIB}
+    ${ABSL_LIBS}
+    ${DEBUGGING_LIBS}
 )
 
 # Set compiler warnings

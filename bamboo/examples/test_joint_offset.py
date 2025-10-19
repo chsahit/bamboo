@@ -91,7 +91,7 @@ def main():
     print()
 
     # Compute goal: current + 0.1 radians
-    goal_joints = current_joints + 0.1
+    goal_joints = current_joints + 0.35
 
     print(f"Goal joints: {goal_joints}")
     print()
@@ -121,19 +121,17 @@ def main():
             print(f"  {i // rate + 1} seconds elapsed...")
 
     print()
-    print("Motion should be complete. Sending termination message...")
-
-    # Send termination
-    send_termination_message(zmq_pub)
-
-    time.sleep(0.5)
+    print("Motion should be complete.")
+    print("C++ control node is still running and ready for new commands.")
+    print("(Use Ctrl+C on the control node to shut it down)")
 
     print("Example completed successfully!")
     print()
     print("Summary:")
-    print("- Sent joint impedance command with 0.1 rad offset")
+    print("- Sent joint impedance command with 0.35 rad offset")
     print("- Used min-jerk interpolation for smooth motion")
     print("- Control node should have moved the robot smoothly to goal")
+    print("- Control node remains active for additional commands")
 
 if __name__ == "__main__":
     try:
