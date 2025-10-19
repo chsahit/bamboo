@@ -5,6 +5,7 @@ Bamboo Client - A simple client for the bamboo control node.
 Provides basic robot state querying functionality.
 """
 
+import json
 import logging
 import sys
 import time
@@ -27,12 +28,15 @@ except ImportError:
 class BambooFrankaClient:
     """Client for communicating with the bamboo control node."""
 
-    def __init__(self, control_port: int = 5556, server_ip: str = "localhost"):
+    def __init__(self, control_port: int = 5556, server_ip: str = "localhost",
+                 gripper_port: int = 5558, enable_gripper: bool = True):
         """Initialize Bamboo Franka Client.
 
         Args:
             control_port: TCP port of the bamboo control node (state published on port+1)
             server_ip: IP address of the bamboo control node server
+            gripper_port: ZMQ port of the gripper server
+            enable_gripper: Whether to enable gripper commands
         """
         self.control_port = control_port
         self.state_port = control_port + 1
@@ -53,6 +57,18 @@ class BambooFrankaClient:
 
         # Give publisher time to connect
         time.sleep(0.1)
+
+        # Set up gripper communication
+        self.gripper_port = gripper_port
+        self.enable_gripper = enable_gripper
+        self.gripper_socket = None
+
+        if enable_gripper:
+            # Set up ZMQ socket for gripper commands (REQ socket for request-response)
+            self.gripper_socket = self.context.socket(zmq.REQ)
+            self.gripper_socket.connect(f"tcp://{self.server_ip}:{gripper_port}")
+            self.gripper_socket.setsockopt(zmq.RCVTIMEO, 5000)  # 5 second timeout
+            logging.info(f"Gripper client connected to {self.server_ip}:{gripper_port}")
 
         # Test connection by trying to receive a state message
         self._test_connection()
@@ -116,8 +132,18 @@ class BambooFrankaClient:
                 # Fallback: identity matrix if pose data is missing
                 ee_pose = np.eye(4).tolist()
 
-            # Hardcoded gripper state as requested
-            gripper_state = 0.0  # Hardcoded gripper width
+            # Get gripper state if available, otherwise use default
+            if self.enable_gripper and self.gripper_socket is not None:
+                try:
+                    gripper_result = self._send_gripper_command({"action": "get_state"})
+                    if gripper_result.get("success") and "state" in gripper_result:
+                        gripper_state = gripper_result["state"].get('width', 0.0)
+                    else:
+                        gripper_state = 0.0
+                except Exception:
+                    gripper_state = 0.0  # Fallback if gripper read fails
+            else:
+                gripper_state = 0.0  # No gripper enabled
 
             return {
                 'success': True,  # Hardcoded to True as requested
@@ -139,6 +165,8 @@ class BambooFrankaClient:
             self.state_sub.close()
         if hasattr(self, 'cmd_pub'):
             self.cmd_pub.close()
+        if hasattr(self, 'gripper_socket') and self.gripper_socket is not None:
+            self.gripper_socket.close()
         if hasattr(self, 'context'):
             self.context.term()
 
@@ -152,6 +180,36 @@ class BambooFrankaClient:
 
     def get_joint_positions(self) -> list[float]:
         return self.get_joint_states()["qpos"]
+
+    def _send_gripper_command(self, command: dict) -> dict:
+        """Send a command to the gripper server.
+
+        Args:
+            command: Dict with command to send
+
+        Returns:
+            Dict with response from gripper server
+
+        Raises:
+            RuntimeError: If gripper communication fails
+        """
+        if not self.enable_gripper or self.gripper_socket is None:
+            raise RuntimeError("Gripper not enabled or not connected")
+
+        try:
+            # Send command
+            self.gripper_socket.send_string(json.dumps(command))
+
+            # Receive response
+            response_str = self.gripper_socket.recv_string()
+            response = json.loads(response_str)
+
+            return response
+
+        except zmq.Again:
+            raise RuntimeError("Timeout waiting for gripper server response")
+        except Exception as e:
+            raise RuntimeError(f"Gripper communication error: {e}")
 
     def _send_joint_impedance_command(self, joint_positions: list, gripper_open: bool = True):
         """Send a single joint impedance command to the control node.
@@ -234,6 +292,64 @@ class BambooFrankaClient:
             logging.error(f"Error in execute_joint_impedance_path: {e}")
             return {"success": False, "error": str(e)}
 
+    def open_gripper(self, speed: float = 0.05, force: float = 0.1) -> dict:
+        """Open the gripper.
+
+        Args:
+            speed: Gripper opening speed (0.0 to 1.0)
+            force: Gripper force (0.0 to 1.0)
+
+        Returns:
+            Dict with 'success' (bool) and 'error' (str) if failed
+        """
+        try:
+            command = {
+                "action": "open",
+                "speed": speed,
+                "force": force
+            }
+            response = self._send_gripper_command(command)
+            return response
+        except Exception as e:
+            logging.error(f"Error in open_gripper: {e}")
+            return {"success": False, "error": str(e)}
+
+    def close_gripper(self, speed: float = 0.05, force: float = 0.1) -> dict:
+        """Close the gripper.
+
+        Args:
+            speed: Gripper closing speed (0.0 to 1.0)
+            force: Gripper force (0.0 to 1.0)
+
+        Returns:
+            Dict with 'success' (bool) and 'error' (str) if failed
+        """
+        try:
+            command = {
+                "action": "close",
+                "speed": speed,
+                "force": force
+            }
+            response = self._send_gripper_command(command)
+            return response
+        except Exception as e:
+            logging.error(f"Error in close_gripper: {e}")
+            return {"success": False, "error": str(e)}
+
+    def get_gripper_state(self) -> dict:
+        """Get current gripper state.
+
+        Returns:
+            Dict with 'success', 'state', and 'error' (str) if failed
+        """
+        try:
+            command = {"action": "get_state"}
+            response = self._send_gripper_command(command)
+            return response
+        except Exception as e:
+            logging.error(f"Error in get_gripper_state: {e}")
+            return {"success": False, "error": str(e)}
+
 
 def main():
     """Simple test of the BambooFrankaClient."""
@@ -246,6 +362,10 @@ def main():
                        help="IP address of bamboo control node server")
     parser.add_argument("--samples", default=5, type=int,
                        help="Number of state samples to fetch")
+    parser.add_argument("--gripper-port", default=5558, type=int,
+                       help="ZMQ port of gripper server")
+    parser.add_argument("--no-gripper", action="store_true",
+                       help="Disable gripper commands")
     args = parser.parse_args()
 
     # Set up logging
@@ -258,7 +378,9 @@ def main():
     print(f"State subscriber will connect to {args.ip}:{args.port + 1}")
 
     try:
-        with BambooFrankaClient(control_port=args.port, server_ip=args.ip) as client:
+        with BambooFrankaClient(control_port=args.port, server_ip=args.ip,
+                               gripper_port=args.gripper_port,
+                               enable_gripper=not args.no_gripper) as client:
             print(f"\nFetching {args.samples} state samples:")
             print("-" * 60)
 
