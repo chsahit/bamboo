@@ -366,7 +366,7 @@ class BambooFrankaClient:
             logging.error(f"Error in open_gripper: {e}")
             return {"success": False, "error": str(e)}
 
-    def close_gripper(self, speed: float = 0.05, force: float = 0.1) -> dict:
+    def close_gripper(self, speed: float = 0.05, force: float = 0.3) -> dict:
         """Close the gripper.
 
         Args:
