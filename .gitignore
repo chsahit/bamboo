@@ -161,8 +161,8 @@ protobuf/
 zmqpp/
 
 # Generated protobuf files (if regenerated from proto)
-*_pb2.py
-*_pb2_grpc.py
+# *_pb2.py
+# *_pb2_grpc.py
 
 # Robot logs and data
 *.log
