@@ -62,14 +62,13 @@ public:
     q_goal_ = q_goal;
   };
 
-  inline bool GetNextStep(const double &time_sec, Vector7d &q_t) {
+  inline void GetNextStep(const double &time_sec, Vector7d &q_t) {
     if (!start_) {
       start_time_ = time_sec;
       last_q_t_ = q_start_;
       start_ = true;
     }
 
-    bool is_finished = false;
     if (last_time_ + dt_ <= time_sec) {
       double t =
           std::min(std::max((time_sec - start_time_) / max_time_, 0.), 1.);
@@ -79,12 +78,8 @@ public:
 
       last_q_t_ = q_start_ + transformed_t * (q_goal_ - q_start_);
       last_time_ = time_sec;
-
-      // Check if interpolation is complete (t reached 1.0)
-      is_finished = (t >= 1.0);
     }
     q_t = last_q_t_;
-    return is_finished;
   };
 };
 
