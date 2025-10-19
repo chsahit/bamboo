@@ -7,8 +7,3 @@ with ZMQ communication to C++ control nodes.
 
 __version__ = "0.1.0"
 __author__ = "Bamboo Development Team"
-
-# Import main modules for easy access
-from . import examples
-
-__all__ = ["examples"]
