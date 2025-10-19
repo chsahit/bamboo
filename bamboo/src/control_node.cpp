@@ -188,9 +188,19 @@ int main(int argc, char** argv) {
                     if (running) {
                         no_msg_counter++;
                         if (no_msg_counter >= 20) {
-                            std::cout << "No messages received for 20 steps, stopping current motion (waiting for new commands)" << std::endl;
+                            std::cout << "No messages received for 20 steps, trajectory completed" << std::endl;
                             running = false;
-                            // DON'T set termination = true, keep waiting for new commands
+
+                            // Send completion message - trajectory is done
+                            FrankaCommandResponse response;
+                            response.set_success(true);
+                            std::string response_str;
+                            response.SerializeToString(&response_str);
+                            zmq::message_t response_zmq_msg(response_str.size());
+                            memcpy(response_zmq_msg.data(), response_str.c_str(), response_str.size());
+                            zmq_response_pub.send(response_zmq_msg, zmq::send_flags::dontwait);
+
+                            std::cout << "Sent trajectory completion message" << std::endl;
                         }
                     }
                     continue;
@@ -270,7 +280,7 @@ int main(int argc, char** argv) {
 
                 // Get interpolated desired position
                 Eigen::Matrix<double, 7, 1> desired_q;
-                bool interpolation_finished = interpolator.GetNextStep(control_time, desired_q);
+                interpolator.GetNextStep(control_time, desired_q);
 
                 // Compute control torques
                 std::array<double, 7> tau_d = controller.Step(robot_state, desired_q);
@@ -279,11 +289,8 @@ int main(int argc, char** argv) {
                 std::array<double, 7> tau_d_rate_limited =
                     franka::limitRate(franka::kMaxTorqueRate, tau_d, robot_state.tau_J_d);
 
-                // Check if interpolation is finished or we should stop
-                if (interpolation_finished || !running || global_shutdown) {
-                    if (interpolation_finished) {
-                        trajectory_completed = true;
-                    }
+                // Check if we should stop (no running flag, close to goal, or shutdown signal)
+                if (!running || global_shutdown) {
                     return franka::MotionFinished(franka::Torques(tau_d_rate_limited));
                 }
 
@@ -294,19 +301,6 @@ int main(int argc, char** argv) {
             try {
                 robot.control(control_callback);
                 std::cout << "Control motion completed. Ready for new commands..." << std::endl;
-
-                // Send completion message
-                FrankaCommandResponse response;
-                response.set_success(trajectory_completed);
-
-                // Serialize and publish response
-                std::string response_str;
-                response.SerializeToString(&response_str);
-                zmq::message_t response_zmq_msg(response_str.size());
-                memcpy(response_zmq_msg.data(), response_str.c_str(), response_str.size());
-                zmq_response_pub.send(response_zmq_msg, zmq::send_flags::dontwait);
-
-                std::cout << "Sent completion message: " << (trajectory_completed ? "success" : "interrupted") << std::endl;
             } catch (const franka::ControlException& e) {
                 std::cerr << "Control exception: " << e.what() << std::endl;
 
