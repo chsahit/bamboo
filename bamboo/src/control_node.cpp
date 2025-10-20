@@ -195,18 +195,17 @@ int main(int argc, char** argv) {
                         }
 
                     } catch (const franka::Exception& e) {
-                        std::cerr << "[STATE_PUB] Franka exception (198): " << e.what() << std::endl;
                         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    } /* catch (const std::exception& e) {
+                    } catch (const std::exception& e) {
                         std::cerr << "[STATE_PUB] Exception: " << e.what() << std::endl;
                         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    }*/
+                    }
                 }
-            /* } catch (...) {
+            } catch (...) {
                 std::cerr << "[STATE_PUB] Unhandled exception in state publisher thread" << std::endl;
                 setThreadException(std::current_exception());
-            }*/
-            // std::cout << "[STATE_PUB] State publisher thread exiting" << std::endl;
+            }
+            std::cout << "[STATE_PUB] State publisher thread exiting" << std::endl;
         });
 
         // Message receiving thread - based on deoxys line 339-573
