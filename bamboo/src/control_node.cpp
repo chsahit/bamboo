@@ -166,7 +166,7 @@ int main(int argc, char** argv) {
 
         // State publisher thread - continuously publishes robot state like deoxys
         std::thread state_pub_thread([&]() {
-            // try {
+            try {
                 while (!termination && !global_shutdown) {
                     std::this_thread::sleep_for(
                         std::chrono::milliseconds(int(1.0 / state_pub_rate * 1000.0))
@@ -195,6 +195,9 @@ int main(int argc, char** argv) {
                         }
 
                     } catch (const franka::Exception& e) {
+#ifdef DEBUG
+                        std::cerr << "[STATE_PUB] Franka exception (198): " << e.what() << std::endl;
+#endif
                         std::this_thread::sleep_for(std::chrono::milliseconds(100));
                     } catch (const std::exception& e) {
                         std::cerr << "[STATE_PUB] Exception: " << e.what() << std::endl;
@@ -253,8 +256,11 @@ int main(int argc, char** argv) {
                         FrankaControlMessage control_msg;
                         std::string msg_str(static_cast<char*>(zmq_msg.data()), zmq_msg.size());
 
+                        
                         if (!control_msg.ParseFromString(msg_str)) {
+#ifdef DEBUG
                             std::cerr << "[MSG_THREAD] Failed to parse control message" << std::endl;
+#endif
                             continue;
                         }
 
