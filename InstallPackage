@@ -5,8 +5,10 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 sudo apt install build-essential cmake git libpoco-dev libeigen3-dev libzmq3-dev g++ apt-transport-https curl gnupg -y
 
-# Clone libfranka to the project root
+# Clone libfranka to third_party
 cd "$SCRIPT_DIR"
+mkdir -p third_party
+cd third_party
 git clone --recurse-submodules https://github.com/frankaemika/libfranka
 cd libfranka
 
@@ -74,6 +76,7 @@ sudo usermod -a -G realtime $USER
 
 # download c++ zmq wrapper
 cd "$SCRIPT_DIR"
+cd third_party
 git clone https://github.com/zeromq/zmqpp.git
 cd zmqpp
 make PREFIX="$SCRIPT_DIR/install"
@@ -81,7 +84,7 @@ make install PREFIX="$SCRIPT_DIR/install"
 cd ..
 
 # download protobuf
-cd "$SCRIPT_DIR"
+cd "$SCRIPT_DIR/third_party"
 git clone --recursive https://github.com/protocolbuffers/protobuf.git
 cd protobuf
 git checkout v33.0

@@ -6,11 +6,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Set path to locally built libfranka and our install directory
-set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../libfranka/build" ${CMAKE_PREFIX_PATH})
+set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libfranka/build" ${CMAKE_PREFIX_PATH})
 
 # Set RPATH so the executable can find libfranka.so at runtime
-set(CMAKE_INSTALL_RPATH "${CMAKE_CURRENT_SOURCE_DIR}/../libfranka/build")
-set(CMAKE_BUILD_RPATH "${CMAKE_CURRENT_SOURCE_DIR}/../libfranka/build")
+set(CMAKE_INSTALL_RPATH "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libfranka/build")
+set(CMAKE_BUILD_RPATH "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libfranka/build")
 
 # Find required packages
 find_package(Franka REQUIRED)
