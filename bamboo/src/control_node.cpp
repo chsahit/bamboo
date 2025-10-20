@@ -9,6 +9,9 @@
 #include <chrono>
 #include <signal.h>
 #include <csignal>
+#include <exception>
+#include <stdexcept>
+#include <mutex>
 
 #include <franka/exception.h>
 #include <franka/model.h>
@@ -26,6 +29,23 @@
 
 // Global flag for signal handling
 std::atomic<bool> global_shutdown{false};
+
+// Global exception handling
+std::mutex exception_mutex;
+std::exception_ptr thread_exception_ptr = nullptr;
+
+void setThreadException(std::exception_ptr ex) {
+    std::lock_guard<std::mutex> lock(exception_mutex);
+    if (!thread_exception_ptr) {
+        thread_exception_ptr = ex;
+        global_shutdown = true;
+    }
+}
+
+std::exception_ptr getThreadException() {
+    std::lock_guard<std::mutex> lock(exception_mutex);
+    return thread_exception_ptr;
+}
 
 // Helper function to populate robot state message
 void populateRobotState(FrankaRobotStateMessage& robot_state_msg, const franka::RobotState& robot_state) {
@@ -146,120 +166,161 @@ int main(int argc, char** argv) {
 
         // State publisher thread - continuously publishes robot state like deoxys
         std::thread state_pub_thread([&]() {
-            while (!termination && !global_shutdown) {
-                std::this_thread::sleep_for(
-                    std::chrono::milliseconds(int(1.0 / state_pub_rate * 1000.0))
-                );
+            // try {
+                while (!termination && !global_shutdown) {
+                    std::this_thread::sleep_for(
+                        std::chrono::milliseconds(int(1.0 / state_pub_rate * 1000.0))
+                    );
+                    
+                    try {
+                        // Get current robot state
+                        franka::RobotState current_state = robot.readOnce();
 
-                try {
-                    // Get current robot state
-                    franka::RobotState current_state = robot.readOnce();
+                        // Create and populate state message
+                        FrankaRobotStateMessage state_msg;
+                        populateRobotState(state_msg, current_state);
 
-                    // Create and populate state message
-                    FrankaRobotStateMessage state_msg;
-                    populateRobotState(state_msg, current_state);
+                        // Serialize and publish
+                        std::string state_str;
+                        if (!state_msg.SerializeToString(&state_str)) {
+                            std::cerr << "[STATE_PUB] Failed to serialize state message" << std::endl;
+                            continue;
+                        }
+                        zmq::message_t state_zmq_msg(state_str.size());
+                        memcpy(state_zmq_msg.data(), state_str.c_str(), state_str.size());
 
-                    // Serialize and publish
-                    std::string state_str;
-                    state_msg.SerializeToString(&state_str);
-                    zmq::message_t state_zmq_msg(state_str.size());
-                    memcpy(state_zmq_msg.data(), state_str.c_str(), state_str.size());
-                    zmq_state_pub.send(state_zmq_msg, zmq::send_flags::dontwait);
+                        auto result = zmq_state_pub.send(state_zmq_msg, zmq::send_flags::dontwait);
+                        if (!result) {
+                            std::cerr << "[STATE_PUB] Failed to send state message" << std::endl;
+                        }
 
-                } catch (const franka::Exception& e) {
-                    // Don't spam errors, just continue
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    } catch (const franka::Exception& e) {
+                        std::cerr << "[STATE_PUB] Franka exception (198): " << e.what() << std::endl;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    } /* catch (const std::exception& e) {
+                        std::cerr << "[STATE_PUB] Exception: " << e.what() << std::endl;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }*/
                 }
-            }
+            /* } catch (...) {
+                std::cerr << "[STATE_PUB] Unhandled exception in state publisher thread" << std::endl;
+                setThreadException(std::current_exception());
+            }*/
+            // std::cout << "[STATE_PUB] State publisher thread exiting" << std::endl;
         });
 
         // Message receiving thread - based on deoxys line 339-573
         std::thread msg_thread([&]() {
-            while (!termination && !global_shutdown) {
-                std::this_thread::sleep_for(
-                    std::chrono::milliseconds(int(1.0 / policy_rate * 1000.0))
-                );
+            try {
+                while (!termination && !global_shutdown) {
+                    std::this_thread::sleep_for(
+                        std::chrono::milliseconds(int(1.0 / policy_rate * 1000.0))
+                    );
 
-                // Try to receive message (non-blocking)
-                zmq::message_t zmq_msg;
-                auto result = zmq_sub.recv(zmq_msg, zmq::recv_flags::dontwait);
+                    try {
+                        // Try to receive message (non-blocking)
+                        zmq::message_t zmq_msg;
+                        auto result = zmq_sub.recv(zmq_msg, zmq::recv_flags::dontwait);
 
-                if (!result || zmq_msg.size() == 0) {
-                    if (running) {
-                        no_msg_counter++;
-                        if (no_msg_counter >= 20) {
-                            std::cout << "No messages received for 20 steps, trajectory completed" << std::endl;
-                            running = false;
+                        if (!result || zmq_msg.size() == 0) {
+                            if (running) {
+                                no_msg_counter++;
+                                if (no_msg_counter >= 20) {
+                                    std::cout << "[MSG_THREAD] No messages received for 20 steps, trajectory completed" << std::endl;
+                                    running = false;
 
-                            // Send completion message - trajectory is done
-                            FrankaCommandResponse response;
-                            response.set_success(true);
-                            std::string response_str;
-                            response.SerializeToString(&response_str);
-                            zmq::message_t response_zmq_msg(response_str.size());
-                            memcpy(response_zmq_msg.data(), response_str.c_str(), response_str.size());
-                            zmq_response_pub.send(response_zmq_msg, zmq::send_flags::dontwait);
-
-                            std::cout << "Sent trajectory completion message" << std::endl;
+                                    // Send completion message - trajectory is done
+                                    FrankaCommandResponse response;
+                                    response.set_success(true);
+                                    std::string response_str;
+                                    if (!response.SerializeToString(&response_str)) {
+                                        std::cerr << "[MSG_THREAD] Failed to serialize completion response" << std::endl;
+                                        continue;
+                                    }
+                                    zmq::message_t response_zmq_msg(response_str.size());
+                                    memcpy(response_zmq_msg.data(), response_str.c_str(), response_str.size());
+                                    auto send_result = zmq_response_pub.send(response_zmq_msg, zmq::send_flags::dontwait);
+                                    if (!send_result) {
+                                        std::cerr << "[MSG_THREAD] Failed to send completion message" << std::endl;
+                                    } else {
+                                        std::cout << "[MSG_THREAD] Sent trajectory completion message" << std::endl;
+                                    }
+                                }
+                            }
+                            continue;
                         }
+
+                        // Parse protobuf message
+                        FrankaControlMessage control_msg;
+                        std::string msg_str(static_cast<char*>(zmq_msg.data()), zmq_msg.size());
+
+                        if (!control_msg.ParseFromString(msg_str)) {
+                            std::cerr << "[MSG_THREAD] Failed to parse control message" << std::endl;
+                            continue;
+                        }
+
+                        no_msg_counter = 0;
+
+                        // Check for termination
+                        if (control_msg.termination()) {
+                            std::cout << "[MSG_THREAD] Termination message received" << std::endl;
+                            running = false;
+                            termination = true;
+                            continue;
+                        }
+
+                        // Extract joint impedance goal (based on deoxys line 525-528)
+                        FrankaJointImpedanceControllerMessage ji_msg;
+                        if (!control_msg.control_msg().UnpackTo(&ji_msg)) {
+                            std::cerr << "[MSG_THREAD] Failed to unpack joint impedance message" << std::endl;
+                            continue;
+                        }
+
+                        // Update goal position
+                        goal_q << ji_msg.goal().q1(), ji_msg.goal().q2(), ji_msg.goal().q3(),
+                                 ji_msg.goal().q4(), ji_msg.goal().q5(), ji_msg.goal().q6(),
+                                 ji_msg.goal().q7();
+
+                        std::cout << "[MSG_THREAD] New goal received: " << goal_q.transpose() << std::endl;
+
+                        // Reset completion flag
+                        trajectory_completed = false;
+
+                        // Reset interpolator (based on deoxys line 543-546)
+                        interpolator.Reset(
+                            control_time,
+                            current_q,
+                            goal_q,
+                            policy_rate,
+                            traj_rate,
+                            traj_interpolator_time_fraction
+                        );
+
+                        running = true;
+
+                    } catch (const std::exception& e) {
+                        std::cerr << "[MSG_THREAD] Exception in message processing: " << e.what() << std::endl;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
                     }
-                    continue;
                 }
-
-                // Parse protobuf message
-                FrankaControlMessage control_msg;
-                std::string msg_str(static_cast<char*>(zmq_msg.data()), zmq_msg.size());
-
-                if (!control_msg.ParseFromString(msg_str)) {
-                    std::cerr << "Failed to parse control message" << std::endl;
-                    continue;
-                }
-
-                no_msg_counter = 0;
-
-                // Check for termination
-                if (control_msg.termination()) {
-                    std::cout << "Termination message received" << std::endl;
-                    running = false;
-                    termination = true;
-                    continue;
-                }
-
-                // Extract joint impedance goal (based on deoxys line 525-528)
-                FrankaJointImpedanceControllerMessage ji_msg;
-                if (!control_msg.control_msg().UnpackTo(&ji_msg)) {
-                    std::cerr << "Failed to unpack joint impedance message" << std::endl;
-                    continue;
-                }
-
-                // Update goal position
-                goal_q << ji_msg.goal().q1(), ji_msg.goal().q2(), ji_msg.goal().q3(),
-                         ji_msg.goal().q4(), ji_msg.goal().q5(), ji_msg.goal().q6(),
-                         ji_msg.goal().q7();
-
-                std::cout << "New goal received: " << goal_q.transpose() << std::endl;
-
-                // Reset completion flag
-                trajectory_completed = false;
-
-                // Reset interpolator (based on deoxys line 543-546)
-                interpolator.Reset(
-                    control_time,
-                    current_q,
-                    goal_q,
-                    policy_rate,
-                    traj_rate,
-                    traj_interpolator_time_fraction
-                );
-
-                running = true;
+            } catch (...) {
+                std::cerr << "[MSG_THREAD] Unhandled exception in message thread" << std::endl;
+                setThreadException(std::current_exception());
             }
+            std::cout << "[MSG_THREAD] Message thread exiting" << std::endl;
         });
 
         // Main control loop - based on deoxys line 575-634
         std::cout << "Starting control loop..." << std::endl;
 
         while (!termination && !global_shutdown) {
+            // Check for thread exceptions
+            auto thread_ex = getThreadException();
+            if (thread_ex) {
+                std::cerr << "[MAIN] Thread exception detected, shutting down" << std::endl;
+                break;
+            }
+
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
             if (!running) {
@@ -271,50 +332,73 @@ int main(int argc, char** argv) {
 
             auto control_callback = [&](const franka::RobotState& robot_state,
                                         franka::Duration period) -> franka::Torques {
+                try {
+                    // Update time
+                    control_time += period.toSec();
 
-                // Update time
-                control_time += period.toSec();
+                    // Update current position
+                    current_q = Eigen::VectorXd::Map(robot_state.q.data(), 7);
 
-                // Update current position
-                current_q = Eigen::VectorXd::Map(robot_state.q.data(), 7);
+                    // Get interpolated desired position
+                    Eigen::Matrix<double, 7, 1> desired_q;
+                    interpolator.GetNextStep(control_time, desired_q);
 
-                // Get interpolated desired position
-                Eigen::Matrix<double, 7, 1> desired_q;
-                interpolator.GetNextStep(control_time, desired_q);
+                    // Compute control torques
+                    std::array<double, 7> tau_d = controller.Step(robot_state, desired_q);
 
-                // Compute control torques
-                std::array<double, 7> tau_d = controller.Step(robot_state, desired_q);
+                    // Apply rate limiting
+                    std::array<double, 7> tau_d_rate_limited =
+                        franka::limitRate(franka::kMaxTorqueRate, tau_d, robot_state.tau_J_d);
 
-                // Apply rate limiting
-                std::array<double, 7> tau_d_rate_limited =
-                    franka::limitRate(franka::kMaxTorqueRate, tau_d, robot_state.tau_J_d);
+                    // Check if we should stop (no running flag, close to goal, or shutdown signal)
+                    if (!running || global_shutdown) {
+                        return franka::MotionFinished(franka::Torques(tau_d_rate_limited));
+                    }
 
-                // Check if we should stop (no running flag, close to goal, or shutdown signal)
-                if (!running || global_shutdown) {
-                    return franka::MotionFinished(franka::Torques(tau_d_rate_limited));
+                    return franka::Torques(tau_d_rate_limited);
+                } catch (const std::exception& e) {
+                    std::cerr << "[CONTROL_CALLBACK] Exception: " << e.what() << std::endl;
+                    std::array<double, 7> zero_torques = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+                    return franka::MotionFinished(franka::Torques(zero_torques));
+                } catch (...) {
+                    std::cerr << "[CONTROL_CALLBACK] Unknown exception" << std::endl;
+                    std::array<double, 7> zero_torques = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+                    return franka::MotionFinished(franka::Torques(zero_torques));
                 }
-
-                return franka::Torques(tau_d_rate_limited);
             };
 
             // Execute control
             try {
                 robot.control(control_callback);
-                std::cout << "Control motion completed. Ready for new commands..." << std::endl;
+                std::cout << "[MAIN] Control motion completed. Ready for new commands..." << std::endl;
             } catch (const franka::ControlException& e) {
-                std::cerr << "Control exception: " << e.what() << std::endl;
+                std::cerr << "[MAIN] Control exception: " << e.what() << std::endl;
 
                 // Send error response
-                FrankaCommandResponse response;
-                response.set_success(false);
+                try {
+                    FrankaCommandResponse response;
+                    response.set_success(false);
 
-                std::string response_str;
-                response.SerializeToString(&response_str);
-                zmq::message_t response_zmq_msg(response_str.size());
-                memcpy(response_zmq_msg.data(), response_str.c_str(), response_str.size());
-                zmq_response_pub.send(response_zmq_msg, zmq::send_flags::dontwait);
+                    std::string response_str;
+                    if (!response.SerializeToString(&response_str)) {
+                        std::cerr << "[MAIN] Failed to serialize error response" << std::endl;
+                    } else {
+                        zmq::message_t response_zmq_msg(response_str.size());
+                        memcpy(response_zmq_msg.data(), response_str.c_str(), response_str.size());
+                        auto send_result = zmq_response_pub.send(response_zmq_msg, zmq::send_flags::dontwait);
+                        if (!send_result) {
+                            std::cerr << "[MAIN] Failed to send error response" << std::endl;
+                        } else {
+                            std::cout << "[MAIN] Sent error completion message" << std::endl;
+                        }
+                    }
+                } catch (const std::exception& e) {
+                    std::cerr << "[MAIN] Exception while sending error response: " << e.what() << std::endl;
+                }
 
-                std::cout << "Sent error completion message" << std::endl;
+                running = false;
+            } catch (const std::exception& e) {
+                std::cerr << "[MAIN] Unexpected exception in control loop: " << e.what() << std::endl;
                 running = false;
             }
 
@@ -322,12 +406,40 @@ int main(int argc, char** argv) {
             control_time = 0.0;
         }
 
-        // Cleanup
-        if (global_shutdown) {
-            termination = true;  // Signal threads to exit
+        // Cleanup - ensure threads exit gracefully
+        std::cout << "[MAIN] Starting cleanup..." << std::endl;
+        termination = true;  // Signal threads to exit
+
+        // Wait for threads to complete
+        try {
+            if (msg_thread.joinable()) {
+                msg_thread.join();
+                std::cout << "[MAIN] Message thread joined" << std::endl;
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "[MAIN] Exception joining message thread: " << e.what() << std::endl;
         }
-        msg_thread.join();
-        state_pub_thread.join();
+
+        try {
+            if (state_pub_thread.joinable()) {
+                state_pub_thread.join();
+                std::cout << "[MAIN] State publisher thread joined" << std::endl;
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "[MAIN] Exception joining state publisher thread: " << e.what() << std::endl;
+        }
+
+        // Check if there was a thread exception
+        auto thread_ex = getThreadException();
+        if (thread_ex) {
+            try {
+                std::rethrow_exception(thread_ex);
+            } catch (const std::exception& e) {
+                std::cerr << "[MAIN] Thread exception: " << e.what() << std::endl;
+            } catch (...) {
+                std::cerr << "[MAIN] Unknown thread exception" << std::endl;
+            }
+        }
 
         if (global_shutdown) {
             std::cout << "Control node shutdown by user (Ctrl+C)" << std::endl;
