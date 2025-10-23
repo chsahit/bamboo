@@ -1,9 +1,12 @@
 - [ ] cleanup references to deoxys line numbers
 - [ ] protobuf build should not show up in examples/ directory
-- [ ] add compilation instructions for debugging
+- [ ] add compilation instructions for debugging / general compilation instructions (Quickstart)
 - [ ] mention caveat with needing sudo for install
 - [ ] document control frequency parameters
 - [ ] document warnings that come up normally when building
+- [ ] tag zmqpp to a version
+- [ ] linting + git protections + release tag
+- [ ] Contributing.md ?
 - [x] remove minimal_joint_impedance example
 - [x] move libfranka to third party and zmqpp to third_party? maybe?
 - [x] move source files out of TLD
