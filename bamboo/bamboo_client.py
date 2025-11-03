@@ -48,6 +48,7 @@ class BambooFrankaClient:
 
         # State subscriber (for receiving robot state)
         self.state_sub = self.context.socket(zmq.SUB)
+        print(f"[CLIENT] Connecting to state publisher on tcp://{self.server_ip}:{self.state_port}")
         self.state_sub.connect(f"tcp://{self.server_ip}:{self.state_port}")
         self.state_sub.setsockopt(zmq.SUBSCRIBE, b"")  # Subscribe to all messages
         self.state_sub.setsockopt(zmq.RCVTIMEO, 1000)  # 1 second timeout
@@ -100,12 +101,36 @@ class BambooFrankaClient:
             RuntimeError: If no state message is received
         """
         try:
-            # Receive state message
-            response_data = self.state_sub.recv()
+            # Drain the message buffer to get the latest state
+            # Keep reading messages until we get the most recent one
+            latest_data = None
+            messages_drained = 0
 
-            # Parse protobuf message
+            # First, get at least one message
+            latest_data = self.state_sub.recv()
+            messages_drained += 1
+
+            # Then drain any additional buffered messages to get the latest
+            while True:
+                try:
+                    # Try to get more recent messages (non-blocking)
+                    newer_data = self.state_sub.recv(zmq.NOBLOCK)
+                    latest_data = newer_data
+                    messages_drained += 1
+                except zmq.Again:
+                    # No more messages available - we have the latest
+                    break
+
+            # Debug: Print how many messages we drained
+            if messages_drained > 1:
+                print(f"[CLIENT] Drained {messages_drained} buffered messages to get latest state")
+
+            # Parse the latest protobuf message
             state_msg = franka_controller_pb2.FrankaRobotStateMessage()
-            state_msg.ParseFromString(response_data)
+            state_msg.ParseFromString(latest_data)
+
+            # Debug: Print what the client received
+            print(f"[CLIENT] Received joint positions: {list(state_msg.q)}")
 
             return state_msg
 
@@ -127,6 +152,9 @@ class BambooFrankaClient:
 
             # Extract joint positions
             qpos = list(state_msg.q)  # Convert to list for JSON serialization
+
+            # Debug: Print what gets returned to user
+            print(f"[CLIENT] Returning joint positions to user: {qpos}")
 
             # Extract end-effector pose (4x4 transformation matrix)
             if len(state_msg.O_T_EE) == 16:

@@ -34,6 +34,8 @@ std::atomic<bool> global_shutdown{false};
 std::mutex exception_mutex;
 std::exception_ptr thread_exception_ptr = nullptr;
 
+// Remove complex state sharing - just use robot.readOnce() directly
+
 void setThreadException(std::exception_ptr ex) {
     std::lock_guard<std::mutex> lock(exception_mutex);
     if (!thread_exception_ptr) {
@@ -49,6 +51,17 @@ std::exception_ptr getThreadException() {
 
 // Helper function to populate robot state message
 void populateRobotState(FrankaRobotStateMessage& robot_state_msg, const franka::RobotState& robot_state) {
+    // Debug: Print what robot_state we're getting in this function
+    static int populate_debug_counter = 0;
+    if (populate_debug_counter % 100 == 0) {  // Every 1 second at 100Hz
+        std::cout << "[POPULATE] Input robot_state.q: ";
+        for (size_t i = 0; i < 7; ++i) {
+            std::cout << robot_state.q[i] << " ";
+        }
+        std::cout << std::endl;
+    }
+    populate_debug_counter++;
+
     // Clear previous data
     robot_state_msg.clear_q();
     robot_state_msg.clear_dq();
@@ -150,6 +163,8 @@ int main(int argc, char** argv) {
             Eigen::VectorXd::Map(init_state.q.data(), 7);
         Eigen::Matrix<double, 7, 1> goal_q = current_q;
 
+        // No need to initialize shared state - state publisher reads directly
+
         std::cout << "Initial joint positions: " << current_q.transpose() << std::endl;
         std::cout << "Ready to receive commands on port " << zmq_port << std::endl;
         std::cout << "Waiting for first command..." << std::endl;
@@ -164,21 +179,43 @@ int main(int argc, char** argv) {
         // State publisher rate (like deoxys)
         const int state_pub_rate = 100;  // Hz
 
-        // State publisher thread - continuously publishes robot state like deoxys
+        // State publisher thread - simple approach with robot.readOnce()
         std::thread state_pub_thread([&]() {
             try {
                 while (!termination && !global_shutdown) {
                     std::this_thread::sleep_for(
                         std::chrono::milliseconds(int(1.0 / state_pub_rate * 1000.0))
                     );
-                    
+
                     try {
-                        // Get current robot state
+                        // Get current robot state directly
                         franka::RobotState current_state = robot.readOnce();
+
+                        // Debug: Print joint positions occasionally
+                        static int debug_counter = 0;
+                        if (debug_counter % 100 == 0) {  // Every 1 second at 100Hz
+                            std::cout << "[STATE_PUB] Current q: ";
+                            for (int i = 0; i < 7; i++) {
+                                std::cout << current_state.q[i] << " ";
+                            }
+                            std::cout << std::endl;
+                        }
+                        debug_counter++;
 
                         // Create and populate state message
                         FrankaRobotStateMessage state_msg;
                         populateRobotState(state_msg, current_state);
+
+                        // Debug: Print what we're about to send in the protobuf message
+                        static int send_debug_counter = 0;
+                        if (send_debug_counter % 100 == 0) {  // Every 1 second at 100Hz
+                            std::cout << "[STATE_PUB] Sending protobuf q: ";
+                            for (int i = 0; i < state_msg.q_size(); i++) {
+                                std::cout << state_msg.q(i) << " ";
+                            }
+                            std::cout << std::endl;
+                        }
+                        send_debug_counter++;
 
                         // Serialize and publish
                         std::string state_str;
@@ -195,10 +232,13 @@ int main(int argc, char** argv) {
                         }
 
                     } catch (const franka::Exception& e) {
-#ifdef DEBUG
-                        std::cerr << "[STATE_PUB] Franka exception (198): " << e.what() << std::endl;
-#endif
-                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                        // This is expected during control - just skip this cycle
+                        static int exception_counter = 0;
+                        if (exception_counter % 100 == 0) {
+                            std::cout << "[STATE_PUB] Franka exception (expected during control): " << e.what() << std::endl;
+                        }
+                        exception_counter++;
+                        continue;
                     } catch (const std::exception& e) {
                         std::cerr << "[STATE_PUB] Exception: " << e.what() << std::endl;
                         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -341,6 +381,8 @@ int main(int argc, char** argv) {
                     // Update time
                     control_time += period.toSec();
 
+                    // No need to share state - state publisher reads directly
+
                     // Update current position
                     current_q = Eigen::VectorXd::Map(robot_state.q.data(), 7);
 
@@ -376,6 +418,8 @@ int main(int argc, char** argv) {
             try {
                 robot.control(control_callback);
                 std::cout << "[MAIN] Control motion completed. Ready for new commands..." << std::endl;
+
+                // No need for post-control state handling - state publisher reads directly
             } catch (const franka::ControlException& e) {
                 std::cerr << "[MAIN] Control exception: " << e.what() << std::endl;
 
