@@ -160,10 +160,10 @@ deoxys_control/
 protobuf/
 zmqpp/
 
-# Generated protobuf files
-bamboo/proto_gen/
-*_pb2.py
-*_pb2_grpc.py
+# Generated protobuf files (C++ only - keep Python files tracked)
+# bamboo/proto_gen/  # Allow Python protobuf files to be tracked
+# *_pb2.py          # Allow Python protobuf files to be tracked
+# *_pb2_grpc.py     # Allow Python protobuf files to be tracked
 
 # Robot logs and data
 *.log
@@ -182,3 +182,5 @@ temp/
 # Local configuration
 local_config.yaml
 robot_config.yaml
+
+third_party/grpc

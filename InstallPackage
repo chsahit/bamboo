@@ -97,3 +97,13 @@ cmake .. -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -Dprotobuf_BUILD_TESTS=OFF
 make -j$(nproc)
 make install
 
+# Clone and build gRPC
+cd "$SCRIPT_DIR/third_party"
+git clone --recurse-submodules -b v1.66.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc
+cd grpc
+mkdir build
+cd build
+cmake -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" ..
+make -j$(nproc)
+make install
+
