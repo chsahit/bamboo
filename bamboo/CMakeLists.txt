@@ -23,19 +23,11 @@ set(Protobuf_LIBRARY "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libprotobuf.a")
 set(Protobuf_PROTOC_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/../install/bin/protoc")
 find_package(Protobuf REQUIRED)
 
-# Find gRPC - use local installation if available
-set(gRPC_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../install")
-find_package(gRPC CONFIG)
-if(gRPC_FOUND)
-    set(GRPC_CPP_PLUGIN_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/../install/bin/grpc_cpp_plugin")
-    set(GRPC_LIBRARIES gRPC::grpc++ gRPC::grpc)
-else()
-    # Fallback to system gRPC
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(GRPC REQUIRED grpc++)
-    set(GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
-    set(GRPC_LIBRARIES ${GRPC_LIBRARIES} grpc++)
-endif()
+# Find gRPC - use local installation
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../install")
+find_package(gRPC CONFIG REQUIRED)
+set(GRPC_CPP_PLUGIN_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/../install/bin/grpc_cpp_plugin")
+set(GRPC_LIBRARIES gRPC::grpc++ gRPC::grpc)
 # Find zmqpp manually since we built it locally
 find_library(ZMQPP_LIBRARY zmqpp PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib" REQUIRED)
 find_path(ZMQPP_INCLUDE_DIR zmqpp/zmqpp.hpp PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../install/include" REQUIRED)
@@ -67,7 +59,10 @@ foreach(PROTO_FILE ${PROTO_FILES})
             ARGS --cpp_out=${PROTO_GENERATED_DIR}
                  --grpc_out=${PROTO_GENERATED_DIR}
                  --plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN_EXECUTABLE}
-                 --python_out=${PROTO_PYTHON_OUT}
+                 -I${PROTO_SRC_DIR}
+                 ${PROTO_FILE}
+            COMMAND python -m grpc_tools.protoc
+            ARGS --python_out=${PROTO_PYTHON_OUT}
                  --grpc_python_out=${PROTO_PYTHON_OUT}
                  -I${PROTO_SRC_DIR}
                  ${PROTO_FILE}
@@ -127,7 +122,7 @@ add_executable(bamboo_grpc_control_node
 
 # Collect all local libraries needed
 file(GLOB ABSL_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libabsl_*.a")
-set(UTF8_RANGE_LIB "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libutf8_range.a")
+set(UTF8_RANGE_LIB "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libutf8_range_lib.a")
 set(UPB_LIB "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libupb.a")
 # Add specific debugging libraries for missing symbols
 set(DEBUGGING_LIBS
@@ -163,6 +158,7 @@ target_link_libraries(bamboo_grpc_control_node
     Eigen3::Eigen
     ${Protobuf_LIBRARY}  # Use our specific protobuf library
     ${GRPC_LIBRARIES}    # Add gRPC libraries
+    gRPC::grpc++_reflection  # Add reflection library
     # Add Pinocchio libraries that libfranka depends on
     /opt/openrobots/lib/libpinocchio_default.so
     /opt/openrobots/lib/libpinocchio_parsers.so
@@ -170,6 +166,8 @@ target_link_libraries(bamboo_grpc_control_node
     ${DEBUGGING_LIBS}
     ${ABSL_LIBS}
     ${UTF8_RANGE_LIB}
+    "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libutf8_range.a"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libutf8_validity.a"
     ${UPB_LIB}
     ${ABSL_LIBS}
     ${DEBUGGING_LIBS}
