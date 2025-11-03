@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 """
-Bamboo Client - A simple client for the bamboo control node.
-Provides basic robot state querying functionality.
+Bamboo gRPC Client - A client for the bamboo control node using gRPC.
+Provides the same API as BambooFrankaClient but uses gRPC instead of ZMQ for arm control.
+Gripper communication still uses ZMQ (unchanged).
 """
 
 import json
@@ -12,12 +13,15 @@ import time
 import zmq
 import numpy as np
 from pathlib import Path
+import grpc
 
 # Add the proto_gen directory to path to import protobuf messages
 sys.path.insert(0, str(Path(__file__).parent / "proto_gen"))
 
 try:
     import franka_controller_pb2
+    import bamboo_service_pb2
+    import bamboo_service_pb2_grpc
 except ImportError:
     raise ImportError(
         "Could not import protobuf messages. Make sure the bamboo project is built. "
@@ -26,53 +30,36 @@ except ImportError:
 
 
 class BambooFrankaClient:
-    """Client for communicating with the bamboo control node."""
+    """Client for communicating with the bamboo control node via gRPC."""
 
-    def __init__(self, control_port: int = 5556, server_ip: str = "localhost",
+    def __init__(self, control_port: int = 50051, server_ip: str = "localhost",
                  gripper_port: int = 5559, enable_gripper: bool = True):
-        """Initialize Bamboo Franka Client.
+        """Initialize Bamboo Franka Client with gRPC.
 
         Args:
-            control_port: TCP port of the bamboo control node (state published on port+1)
+            control_port: gRPC port of the bamboo control node (default: 50051)
             server_ip: IP address of the bamboo control node server
-            gripper_port: ZMQ port of the gripper server
+            gripper_port: ZMQ port of the gripper server (unchanged)
             enable_gripper: Whether to enable gripper commands
         """
         self.control_port = control_port
-        self.state_port = control_port + 1
-        self.response_port = control_port + 2
         self.server_ip = server_ip
 
-        # Set up ZMQ context and sockets
-        self.context = zmq.Context()
+        # Set up gRPC channel and stub for arm control
+        self.grpc_address = f"{self.server_ip}:{self.control_port}"
+        self.channel = grpc.insecure_channel(self.grpc_address)
+        self.stub = bamboo_service_pb2_grpc.BambooControlServiceStub(self.channel)
 
-        # State subscriber (for receiving robot state)
-        self.state_sub = self.context.socket(zmq.SUB)
-        self.state_sub.connect(f"tcp://{self.server_ip}:{self.state_port}")
-        self.state_sub.setsockopt(zmq.SUBSCRIBE, b"")  # Subscribe to all messages
-        self.state_sub.setsockopt(zmq.RCVTIMEO, 1000)  # 1 second timeout
-
-        # Command publisher (for sending commands to control node)
-        self.cmd_pub = self.context.socket(zmq.PUB)
-        self.cmd_pub.connect(f"tcp://{self.server_ip}:{self.control_port}")
-
-        # Response subscriber (for receiving command completion notifications)
-        self.response_sub = self.context.socket(zmq.SUB)
-        self.response_sub.connect(f"tcp://{self.server_ip}:{self.response_port}")
-        self.response_sub.setsockopt(zmq.SUBSCRIBE, b"")  # Subscribe to all messages
-        self.response_sub.setsockopt(zmq.RCVTIMEO, 1000)  # 1 second timeout
-
-        # Give publisher time to connect
-        time.sleep(0.1)
-
-        # Set up gripper communication
+        # Set up gripper communication (ZMQ - unchanged)
         self.gripper_port = gripper_port
         self.enable_gripper = enable_gripper
         self.gripper_socket = None
+        self.zmq_context = None
 
         if enable_gripper:
             # Set up ZMQ socket for gripper commands (REQ socket for request-response)
-            self.gripper_socket = self.context.socket(zmq.REQ)
+            self.zmq_context = zmq.Context()
+            self.gripper_socket = self.zmq_context.socket(zmq.REQ)
             self.gripper_socket.connect(f"tcp://{self.server_ip}:{gripper_port}")
             self.gripper_socket.setsockopt(zmq.RCVTIMEO, 5000)  # 5 second timeout
             logging.info(f"Gripper client connected to {self.server_ip}:{gripper_port}")
@@ -85,10 +72,10 @@ class BambooFrankaClient:
         try:
             # Try to receive a state message to verify connection
             self._get_latest_state()
-            logging.info(f"Successfully connected to bamboo control node at {self.server_ip}:{self.control_port}")
+            logging.info(f"Successfully connected to bamboo control node at {self.grpc_address}")
         except Exception as e:
-            logging.warning(f"Could not connect to bamboo control node at {self.server_ip}:{self.control_port}: {e}")
-            logging.warning("Make sure the bamboo control node is running and publishing state.")
+            logging.warning(f"Could not connect to bamboo control node at {self.grpc_address}: {e}")
+            logging.warning("Make sure the bamboo control node is running.")
 
     def _get_latest_state(self):
         """Get the latest robot state from the bamboo control node.
@@ -100,17 +87,16 @@ class BambooFrankaClient:
             RuntimeError: If no state message is received
         """
         try:
-            # Receive state message
-            response_data = self.state_sub.recv()
+            # Create request
+            request = bamboo_service_pb2.RobotStateRequest()
 
-            # Parse protobuf message
-            state_msg = franka_controller_pb2.FrankaRobotStateMessage()
-            state_msg.ParseFromString(response_data)
+            # Call gRPC service with timeout
+            response = self.stub.GetRobotState(request, timeout=1.0)
 
-            return state_msg
+            return response
 
-        except zmq.Again:
-            raise RuntimeError("Timeout: No state messages received from bamboo control node")
+        except grpc.RpcError as e:
+            raise RuntimeError(f"gRPC error getting robot state: {e.code()} - {e.details()}")
         except Exception as e:
             raise RuntimeError(f"Error receiving state from bamboo control node: {e}")
 
@@ -167,17 +153,13 @@ class BambooFrankaClient:
             }
 
     def close(self):
-        """Clean up ZMQ resources."""
-        if hasattr(self, 'state_sub'):
-            self.state_sub.close()
-        if hasattr(self, 'cmd_pub'):
-            self.cmd_pub.close()
-        if hasattr(self, 'response_sub'):
-            self.response_sub.close()
+        """Clean up gRPC and ZMQ resources."""
+        if hasattr(self, 'channel'):
+            self.channel.close()
         if hasattr(self, 'gripper_socket') and self.gripper_socket is not None:
             self.gripper_socket.close()
-        if hasattr(self, 'context'):
-            self.context.term()
+        if hasattr(self, 'zmq_context') and self.zmq_context is not None:
+            self.zmq_context.term()
 
     def __enter__(self):
         """Context manager entry."""
@@ -220,88 +202,6 @@ class BambooFrankaClient:
         except Exception as e:
             raise RuntimeError(f"Gripper communication error: {e}")
 
-    def _send_joint_impedance_command(self, joint_positions: list, gripper_open: bool = True):
-        """Send a single joint impedance command to the control node.
-
-        Args:
-            joint_positions: List of 7 joint positions
-            gripper_open: Whether gripper should be open (ignored for now)
-
-        Raises:
-            RuntimeError: If command sending fails
-        """
-        try:
-            # Create joint impedance control message
-            ji_msg = franka_controller_pb2.FrankaJointImpedanceControllerMessage()
-
-            # Set goal joint positions
-            goal = ji_msg.goal
-            goal.is_delta = False  # Absolute positions
-            goal.q1 = joint_positions[0]
-            goal.q2 = joint_positions[1]
-            goal.q3 = joint_positions[2]
-            goal.q4 = joint_positions[3]
-            goal.q5 = joint_positions[4]
-            goal.q6 = joint_positions[5]
-            goal.q7 = joint_positions[6]
-
-            # Set default impedance parameters (matching deoxys defaults)
-            for i in range(7):
-                ji_msg.kp.append(600.0)  # Default stiffness
-                ji_msg.kd.append(50.0)   # Default damping
-
-            # Create main control message
-            control_msg = franka_controller_pb2.FrankaControlMessage()
-            control_msg.termination = False
-            control_msg.controller_type = franka_controller_pb2.FrankaControlMessage.JOINT_IMPEDANCE
-            control_msg.traj_interpolator_type = franka_controller_pb2.FrankaControlMessage.MIN_JERK_JOINT_POSITION
-            control_msg.traj_interpolator_time_fraction = 0.1  # 10% of trajectory time for interpolation
-            control_msg.timeout = 10.0
-
-            # Pack the joint impedance message
-            control_msg.control_msg.Pack(ji_msg)
-
-            # Serialize and send
-            msg_data = control_msg.SerializeToString()
-            self.cmd_pub.send(msg_data)
-
-        except Exception as e:
-            raise RuntimeError(f"Failed to send joint impedance command: {e}")
-
-    def _wait_for_trajectory_completion(self, timeout: float = 30.0) -> dict:
-        """Wait for trajectory completion response.
-
-        Args:
-            timeout: Maximum time to wait in seconds
-
-        Returns:
-            Dict with completion response or timeout error
-        """
-        start_time = time.time()
-
-        while time.time() - start_time < timeout:
-            try:
-                # Try to receive a response message
-                response_data = self.response_sub.recv(zmq.NOBLOCK)
-
-                # Parse protobuf message
-                response_msg = franka_controller_pb2.FrankaCommandResponse()
-                response_msg.ParseFromString(response_data)
-
-                # Return the success status
-                return {"success": response_msg.success}
-
-            except zmq.Again:
-                # No message received, continue waiting
-                time.sleep(0.01)
-                continue
-
-        # Timeout
-        return {
-            "success": False,
-            "error": "Timeout waiting for trajectory completion"
-        }
-
     def execute_joint_impedance_path(self, joint_confs: list, gripper_isopen=True) -> dict:
         """Execute joint impedance trajectory and wait for completion.
 
@@ -315,31 +215,64 @@ class BambooFrankaClient:
         try:
             logging.info(f'Executing {len(joint_confs)} joint waypoints')
 
-            # Send each joint configuration as a command
+            # Build trajectory request with all waypoints
+            trajectory_request = bamboo_service_pb2.JointImpedanceTrajectoryRequest()
+
+            # Create each waypoint as a FrankaControlMessage
             for i, joint_conf in enumerate(joint_confs):
                 if len(joint_conf) != 7:
                     raise ValueError(f"Joint configuration {i} must have 7 values, got {len(joint_conf)}")
 
-                # Determine gripper state for this waypoint
-                if isinstance(gripper_isopen, list):
-                    gripper_open = gripper_isopen[i] if i < len(gripper_isopen) else gripper_isopen[-1]
-                else:
-                    gripper_open = gripper_isopen
+                # Create joint impedance control message
+                ji_msg = franka_controller_pb2.FrankaJointImpedanceControllerMessage()
 
-                # Send command to control node
-                self._send_joint_impedance_command(joint_conf, gripper_open)
+                # Set goal joint positions
+                goal = ji_msg.goal
+                goal.is_delta = False  # Absolute positions
+                goal.q1 = joint_conf[0]
+                goal.q2 = joint_conf[1]
+                goal.q3 = joint_conf[2]
+                goal.q4 = joint_conf[3]
+                goal.q5 = joint_conf[4]
+                goal.q6 = joint_conf[5]
+                goal.q7 = joint_conf[6]
 
-            # Wait for the last trajectory to complete
-            logging.info("Waiting for trajectory completion...")
-            result = self._wait_for_trajectory_completion()
+                # Set default impedance parameters (matching deoxys defaults)
+                for _ in range(7):
+                    ji_msg.kp.append(600.0)  # Default stiffness
+                    ji_msg.kd.append(50.0)   # Default damping
 
-            if result["success"]:
+                # Create main control message
+                control_msg = franka_controller_pb2.FrankaControlMessage()
+                control_msg.termination = False
+                control_msg.controller_type = franka_controller_pb2.FrankaControlMessage.JOINT_IMPEDANCE
+                control_msg.traj_interpolator_type = franka_controller_pb2.FrankaControlMessage.MIN_JERK_JOINT_POSITION
+                control_msg.traj_interpolator_time_fraction = 0.1  # 10% of trajectory time for interpolation
+                control_msg.timeout = 10.0
+
+                # Pack the joint impedance message
+                control_msg.control_msg.Pack(ji_msg)
+
+                # Add to trajectory
+                trajectory_request.waypoints.append(control_msg)
+
+            # Send trajectory to gRPC service and wait for completion
+            logging.info("Sending trajectory to control node...")
+            response = self.stub.ExecuteJointImpedanceTrajectory(
+                trajectory_request,
+                timeout=60.0  # Long timeout for trajectory execution
+            )
+
+            if response.success:
                 logging.info("Trajectory completed successfully")
+                return {"success": True}
             else:
-                logging.error(f"Trajectory failed: {result.get('error', 'Unknown error')}")
+                logging.error("Trajectory failed")
+                return {"success": False, "error": "Trajectory execution failed"}
 
-            return result
-
+        except grpc.RpcError as e:
+            logging.error(f"gRPC error in execute_joint_impedance_path: {e.code()} - {e.details()}")
+            return {"success": False, "error": f"gRPC error: {e.details()}"}
         except Exception as e:
             logging.error(f"Error in execute_joint_impedance_path: {e}")
             return {"success": False, "error": str(e)}
@@ -407,9 +340,9 @@ def main():
     """Simple test of the BambooFrankaClient."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Test Bamboo Franka Client")
-    parser.add_argument("--port", default=5556, type=int,
-                       help="Control port of bamboo control node")
+    parser = argparse.ArgumentParser(description="Test Bamboo Franka Client (gRPC)")
+    parser.add_argument("--port", default=50051, type=int,
+                       help="gRPC port of bamboo control node")
     parser.add_argument("--ip", default="localhost", type=str,
                        help="IP address of bamboo control node server")
     parser.add_argument("--samples", default=5, type=int,
@@ -426,8 +359,7 @@ def main():
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
 
-    print(f"Testing BambooFrankaClient at {args.ip}:{args.port}")
-    print(f"State subscriber will connect to {args.ip}:{args.port + 1}")
+    print(f"Testing BambooFrankaClient (gRPC) at {args.ip}:{args.port}")
 
     try:
         with BambooFrankaClient(control_port=args.port, server_ip=args.ip,

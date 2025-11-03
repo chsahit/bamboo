@@ -160,9 +160,10 @@ deoxys_control/
 protobuf/
 zmqpp/
 
-# Generated protobuf files (if regenerated from proto)
-# *_pb2.py
-# *_pb2_grpc.py
+# Generated protobuf files
+bamboo/proto_gen/
+*_pb2.py
+*_pb2_grpc.py
 
 # Robot logs and data
 *.log

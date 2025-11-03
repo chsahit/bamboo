@@ -22,35 +22,76 @@ set(Protobuf_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../install/include")
 set(Protobuf_LIBRARY "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libprotobuf.a")
 set(Protobuf_PROTOC_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/../install/bin/protoc")
 find_package(Protobuf REQUIRED)
+
+# Find gRPC - use local installation if available
+set(gRPC_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../install")
+find_package(gRPC CONFIG)
+if(gRPC_FOUND)
+    set(GRPC_CPP_PLUGIN_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/../install/bin/grpc_cpp_plugin")
+    set(GRPC_LIBRARIES gRPC::grpc++ gRPC::grpc)
+else()
+    # Fallback to system gRPC
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(GRPC REQUIRED grpc++)
+    set(GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
+    set(GRPC_LIBRARIES ${GRPC_LIBRARIES} grpc++)
+endif()
 # Find zmqpp manually since we built it locally
 find_library(ZMQPP_LIBRARY zmqpp PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib" REQUIRED)
 find_path(ZMQPP_INCLUDE_DIR zmqpp/zmqpp.hpp PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../install/include" REQUIRED)
 
-# Generate protobuf files
+# Generate protobuf and gRPC files
 set(PROTO_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/proto")
 file(GLOB PROTO_FILES "${PROTO_SRC_DIR}/*.proto")
 
 set(PROTO_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/proto_generated")
 file(MAKE_DIRECTORY ${PROTO_GENERATED_DIR})
 
+# Python protobuf output directory
+set(PROTO_PYTHON_OUT "${CMAKE_CURRENT_SOURCE_DIR}/proto_gen")
+file(MAKE_DIRECTORY ${PROTO_PYTHON_OUT})
+
 foreach(PROTO_FILE ${PROTO_FILES})
     get_filename_component(PROTO_NAME ${PROTO_FILE} NAME_WE)
     set(PROTO_SRC "${PROTO_GENERATED_DIR}/${PROTO_NAME}.pb.cc")
     set(PROTO_HDR "${PROTO_GENERATED_DIR}/${PROTO_NAME}.pb.h")
 
-    add_custom_command(
-        OUTPUT ${PROTO_SRC} ${PROTO_HDR}
-        COMMAND ${PROTOBUF_PROTOC_EXECUTABLE}
-        ARGS --cpp_out=${PROTO_GENERATED_DIR}
-             --python_out=${CMAKE_CURRENT_SOURCE_DIR}/examples
-             -I${PROTO_SRC_DIR}
-             ${PROTO_FILE}
-        DEPENDS ${PROTO_FILE}
-        COMMENT "Generating protobuf files for ${PROTO_NAME}"
-    )
+    # Check if this is the service proto file (contains gRPC service definitions)
+    if(PROTO_NAME STREQUAL "bamboo_service")
+        set(GRPC_SRC "${PROTO_GENERATED_DIR}/${PROTO_NAME}.grpc.pb.cc")
+        set(GRPC_HDR "${PROTO_GENERATED_DIR}/${PROTO_NAME}.grpc.pb.h")
 
-    list(APPEND PROTO_SRCS ${PROTO_SRC})
-    list(APPEND PROTO_HDRS ${PROTO_HDR})
+        add_custom_command(
+            OUTPUT ${PROTO_SRC} ${PROTO_HDR} ${GRPC_SRC} ${GRPC_HDR}
+            COMMAND ${PROTOBUF_PROTOC_EXECUTABLE}
+            ARGS --cpp_out=${PROTO_GENERATED_DIR}
+                 --grpc_out=${PROTO_GENERATED_DIR}
+                 --plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN_EXECUTABLE}
+                 --python_out=${PROTO_PYTHON_OUT}
+                 --grpc_python_out=${PROTO_PYTHON_OUT}
+                 -I${PROTO_SRC_DIR}
+                 ${PROTO_FILE}
+            DEPENDS ${PROTO_FILE}
+            COMMENT "Generating protobuf and gRPC files for ${PROTO_NAME}"
+        )
+
+        list(APPEND PROTO_SRCS ${PROTO_SRC} ${GRPC_SRC})
+        list(APPEND PROTO_HDRS ${PROTO_HDR} ${GRPC_HDR})
+    else()
+        add_custom_command(
+            OUTPUT ${PROTO_SRC} ${PROTO_HDR}
+            COMMAND ${PROTOBUF_PROTOC_EXECUTABLE}
+            ARGS --cpp_out=${PROTO_GENERATED_DIR}
+                 --python_out=${PROTO_PYTHON_OUT}
+                 -I${PROTO_SRC_DIR}
+                 ${PROTO_FILE}
+            DEPENDS ${PROTO_FILE}
+            COMMENT "Generating protobuf files for ${PROTO_NAME}"
+        )
+
+        list(APPEND PROTO_SRCS ${PROTO_SRC})
+        list(APPEND PROTO_HDRS ${PROTO_HDR})
+    endif()
 endforeach()
 
 # Include directories - prioritize our local protobuf
@@ -74,9 +115,14 @@ target_link_libraries(bamboo_controllers
     ${PROTOBUF_LIBRARIES}
 )
 
-# Create control node executable
+# Create control node executable (ZMQ-based, original)
 add_executable(bamboo_control_node
     src/control_node.cpp
+)
+
+# Create gRPC-based control node executable
+add_executable(bamboo_grpc_control_node
+    src/grpc_control_node.cpp
 )
 
 # Collect all local libraries needed
@@ -111,9 +157,28 @@ target_link_libraries(bamboo_control_node
     ${DEBUGGING_LIBS}
 )
 
+target_link_libraries(bamboo_grpc_control_node
+    bamboo_controllers
+    Franka::Franka
+    Eigen3::Eigen
+    ${Protobuf_LIBRARY}  # Use our specific protobuf library
+    ${GRPC_LIBRARIES}    # Add gRPC libraries
+    # Add Pinocchio libraries that libfranka depends on
+    /opt/openrobots/lib/libpinocchio_default.so
+    /opt/openrobots/lib/libpinocchio_parsers.so
+    # Add all absl libraries for our protobuf - link twice to resolve circular deps
+    ${DEBUGGING_LIBS}
+    ${ABSL_LIBS}
+    ${UTF8_RANGE_LIB}
+    ${UPB_LIB}
+    ${ABSL_LIBS}
+    ${DEBUGGING_LIBS}
+)
+
 # Set compiler warnings
 target_compile_options(bamboo_controllers PRIVATE -Wall -Wextra)
 target_compile_options(bamboo_control_node PRIVATE -Wall -Wextra)
+target_compile_options(bamboo_grpc_control_node PRIVATE -Wall -Wextra)
 
 # Print info
 message(STATUS "Bamboo build configuration:")

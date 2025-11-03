@@ -1,0 +1,37 @@
+syntax = 'proto3';
+
+import "franka_controller.proto";
+
+package bamboo;
+
+// gRPC service for Bamboo arm control
+// Replaces the ZMQ pub-sub pattern for arm control only
+// Gripper communication remains ZMQ-based
+service BambooControlService {
+  // Get current robot state (replaces ZMQ state subscriber on port+1)
+  rpc GetRobotState(RobotStateRequest) returns (FrankaRobotStateMessage);
+
+  // Execute a sequence of joint impedance control waypoints
+  // Sends all waypoints as a single request, waits for entire trajectory to complete
+  rpc ExecuteJointImpedanceTrajectory(JointImpedanceTrajectoryRequest) returns (FrankaCommandResponse);
+
+  // Terminate the control node gracefully
+  rpc Terminate(TerminateRequest) returns (FrankaCommandResponse);
+}
+
+// Request message for getting robot state
+message RobotStateRequest {
+  // Empty for now, can add filtering options later if needed
+}
+
+// Request message for joint impedance trajectory with multiple waypoints
+message JointImpedanceTrajectoryRequest {
+  // Sequence of control messages to execute
+  // Each message represents one waypoint in the trajectory
+  repeated FrankaControlMessage waypoints = 1;
+}
+
+// Request to terminate the control node
+message TerminateRequest {
+  // Empty for now
+}
