@@ -16,7 +16,7 @@ import numpy as np
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from bamboo_grpc_client import BambooFrankaClient
+from bamboo_client import BambooFrankaClient
 
 def main():
     # Set up logging

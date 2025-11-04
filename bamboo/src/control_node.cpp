@@ -206,8 +206,8 @@ public:
                 trajectory_goals.push_back(goal);
                 trajectory_durations.push_back(waypoint_duration);
 
-                std::cout << "[GRPC] Waypoint " << i+1 << "/" << request->waypoints_size()
-                          << " (duration: " << waypoint_duration << "s): " << goal.transpose() << std::endl;
+                // std::cout << "[GRPC] Waypoint " << i+1 << "/" << request->waypoints_size()
+                //           << " (duration: " << waypoint_duration << "s): " << goal.transpose() << std::endl;
             }
 
             // Execute entire trajectory in single control call
@@ -279,18 +279,17 @@ private:
                     current_waypoint++;
 
                     if (current_waypoint >= goals.size()) {
-                        // All waypoints completed
-                        std::cout << "[CONTROL] All waypoints completed" << std::endl;
-                        return franka::MotionFinished(franka::Torques({0,0,0,0,0,0,0}));
+                        // If still moving, continue with current control to let robot settle
+                        current_waypoint = goals.size() - 1; // Stay on last waypoint
+                    } else {
+                        // Setup next waypoint
+                        waypoint_start_time = control_time;
+                        goal_q_ = goals[current_waypoint];
+                        interpolator_->Reset(control_time, current_q_, goal_q_, traj_rate_, durations[current_waypoint]);
+
+                        // std::cout << "[CONTROL] Moving to waypoint " << current_waypoint + 1
+                        //           << "/" << goals.size() << std::endl;
                     }
-
-                    // Setup next waypoint
-                    waypoint_start_time = control_time;
-                    goal_q_ = goals[current_waypoint];
-                    interpolator_->Reset(control_time, current_q_, goal_q_, traj_rate_, durations[current_waypoint]);
-
-                    std::cout << "[CONTROL] Moving to waypoint " << current_waypoint + 1
-                              << "/" << goals.size() << std::endl;
                 }
 
                 // Get interpolated desired position for current waypoint
@@ -303,6 +302,17 @@ private:
                 // Apply rate limiting
                 std::array<double, 7> tau_d_rate_limited =
                     franka::limitRate(franka::kMaxTorqueRate, tau_d, robot_state.tau_J_d);
+
+                // Check if all waypoints completed and robot has stopped
+                if (current_waypoint >= goals.size() - 1 && waypoint_elapsed >= durations[current_waypoint]) {
+                    Eigen::VectorXd current_dq = Eigen::VectorXd::Map(robot_state.dq.data(), 7);
+                    double velocity_norm = current_dq.norm();
+
+                    if (velocity_norm < 0.01) { // Robot has stopped (threshold: 0.01 rad/s)
+                        std::cout << "[CONTROL] All waypoints completed, robot stopped" << std::endl;
+                        return franka::MotionFinished(franka::Torques(tau_d_rate_limited));
+                    }
+                }
 
                 // Check if we should stop
                 if (!control_running_ || global_shutdown) {
