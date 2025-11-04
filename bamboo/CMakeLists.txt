@@ -110,14 +110,9 @@ target_link_libraries(bamboo_controllers
     ${PROTOBUF_LIBRARIES}
 )
 
-# Create control node executable (ZMQ-based, original)
+# Create control node executable
 add_executable(bamboo_control_node
     src/control_node.cpp
-)
-
-# Create gRPC-based control node executable
-add_executable(bamboo_grpc_control_node
-    src/grpc_control_node.cpp
 )
 
 # Collect all local libraries needed
@@ -134,25 +129,6 @@ set(DEBUGGING_LIBS
 )
 
 target_link_libraries(bamboo_control_node
-    bamboo_controllers
-    Franka::Franka
-    Eigen3::Eigen
-    ${Protobuf_LIBRARY}  # Use our specific protobuf library
-    ${ZMQPP_LIBRARY}
-    zmq
-    # Add Pinocchio libraries that libfranka depends on
-    /opt/openrobots/lib/libpinocchio_default.so
-    /opt/openrobots/lib/libpinocchio_parsers.so
-    # Add all absl libraries for our protobuf - link twice to resolve circular deps
-    ${DEBUGGING_LIBS}
-    ${ABSL_LIBS}
-    ${UTF8_RANGE_LIB}
-    ${UPB_LIB}
-    ${ABSL_LIBS}
-    ${DEBUGGING_LIBS}
-)
-
-target_link_libraries(bamboo_grpc_control_node
     bamboo_controllers
     Franka::Franka
     Eigen3::Eigen
@@ -176,7 +152,6 @@ target_link_libraries(bamboo_grpc_control_node
 # Set compiler warnings
 target_compile_options(bamboo_controllers PRIVATE -Wall -Wextra)
 target_compile_options(bamboo_control_node PRIVATE -Wall -Wextra)
-target_compile_options(bamboo_grpc_control_node PRIVATE -Wall -Wextra)
 
 # Print info
 message(STATUS "Bamboo build configuration:")
