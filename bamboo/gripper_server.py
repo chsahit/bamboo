@@ -129,7 +129,7 @@ def main():
     parser = argparse.ArgumentParser(description="Gripper Server for Robotiq control")
     parser.add_argument("--gripper-port", default="/dev/ttyUSB0", type=str,
                        help="Serial port for Robotiq gripper")
-    parser.add_argument("--zmq-port", default=5558, type=int,
+    parser.add_argument("--zmq-port", default=5559, type=int,
                        help="ZMQ port to listen on")
     parser.add_argument("--verbose", "-v", action="store_true",
                        help="Enable verbose logging")

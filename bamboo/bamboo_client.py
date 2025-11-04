@@ -370,7 +370,7 @@ def main():
                        help="IP address of bamboo control node server")
     parser.add_argument("--samples", default=5, type=int,
                        help="Number of state samples to fetch")
-    parser.add_argument("--gripper-port", default=5558, type=int,
+    parser.add_argument("--gripper-port", default=5559, type=int,
                        help="ZMQ port of gripper server")
     parser.add_argument("--no-gripper", action="store_true",
                        help="Disable gripper commands")
