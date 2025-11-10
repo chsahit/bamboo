@@ -10,11 +10,11 @@ namespace controllers {
 JointImpedanceController::JointImpedanceController(franka::Model* model)
     : model_(model), first_state_(true), alpha_q_(0.9), alpha_dq_(0.9) {
 
-    // Kp_ << 100.0, 100.0, 100.0, 100.0, 75.0, 150.0, 50.0;
-    // Kd_ << 20.0, 20.0, 20.0, 20.0, 7.5, 15.0, 5.0;
+    Kp_ << 100.0, 100.0, 100.0, 100.0, 75.0, 150.0, 50.0;
+    Kd_ << 20.0, 20.0, 20.0, 20.0, 7.5, 15.0, 5.0;
 
-    Kp_ << 300.0, 200.0, 200.0, 200.0, 150.0, 300.0, 100.0;
-    Kd_ << 40.0, 30.0, 30.0, 30.0, 12, 25.0, 8.0;
+    // Kp_ << 300.0, 200.0, 200.0, 200.0, 150.0, 300.0, 100.0;
+    // Kd_ << 40.0, 30.0, 30.0, 30.0, 12, 25.0, 8.0;
 
     joint_max_ << 2.8978, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973;
     joint_min_ << -2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973;
@@ -34,13 +34,16 @@ void JointImpedanceController::SetGains(
 
 std::array<double, 7> JointImpedanceController::Step(
     const franka::RobotState& robot_state,
-    const Eigen::Matrix<double, 7, 1>& desired_q) {
+    const Eigen::Matrix<double, 7, 1>& desired_q,
+    const Eigen::Matrix<double, 7, 1>& desired_dq) {
 
     std::array<double, 49> mass_array = model_->mass(robot_state);
     Eigen::Map<Eigen::Matrix<double, 7, 7>> M(mass_array.data());
 
     std::array<double, 7> coriolis_array = model_->coriolis(robot_state);
+    std::array<double, 7> gravity_array = model_->gravity(robot_state);
     Eigen::Map<const Eigen::Matrix<double, 7, 1>> coriolis(coriolis_array.data());
+    Eigen::Map<const Eigen::Matrix<double, 7, 1>> gravity(gravity_array.data());
 
     Eigen::Map<const Eigen::Matrix<double, 7, 1>> q(robot_state.q.data());
     Eigen::Map<const Eigen::Matrix<double, 7, 1>> dq(robot_state.dq.data());
@@ -60,16 +63,18 @@ std::array<double, 7> JointImpedanceController::Step(
     current_dq = smoothed_dq_;
 
     Eigen::Matrix<double, 7, 1> joint_pos_error = desired_q - current_q;
+    Eigen::Matrix<double, 7, 1> joint_vel_error = desired_dq - current_dq;
 
-    // tau = Kp * (q_desired - q) - Kd * dq
+    // tau = Kp * (q_desired - q) + Kd * (dq_desired - dq) + coriolis
     Eigen::Matrix<double, 7, 1> tau_d =
-        Kp_.cwiseProduct(joint_pos_error) - Kd_.cwiseProduct(current_dq);
+        Kp_.cwiseProduct(joint_pos_error) + Kd_.cwiseProduct(joint_vel_error) + coriolis;
 
-    // Joint limit safety (lines 156-161 in deoxys)
+
     // Zero torque when approaching joint limits (within 0.1 rad)
     Eigen::Matrix<double, 7, 1> dist2joint_max = joint_max_ - current_q;
     Eigen::Matrix<double, 7, 1> dist2joint_min = current_q - joint_min_;
 
+    /*
     for (int i = 0; i < 7; i++) {
         if (dist2joint_max[i] < 0.1 && tau_d[i] > 0.0) {
             tau_d[i] = 0.0;
@@ -78,7 +83,7 @@ std::array<double, 7> JointImpedanceController::Step(
             tau_d[i] = 0.0;
         }
     }
-
+    */
     // Apply torque limits
     for (int i = 0; i < 7; i++) {
         if (tau_d[i] > joint_tau_limits_[i]) {

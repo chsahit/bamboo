@@ -46,7 +46,12 @@ class BambooFrankaClient:
         self.server_ip = server_ip
 
         self.grpc_address = f"{self.server_ip}:{self.control_port}"
-        self.channel = grpc.insecure_channel(self.grpc_address)
+        options = [
+            ('grpc.keepalive_time_ms', 10000),
+            ('grpc.keepalive_timeout_ms', 5000),
+            ('grpc.keepalive_permit_without_calls', True)
+        ]
+        self.channel = grpc.insecure_channel(self.grpc_address, options=options)
         self.stub = bamboo_service_pb2_grpc.BambooControlServiceStub(self.channel)
 
         self.gripper_port = gripper_port
@@ -209,12 +214,13 @@ class BambooFrankaClient:
         except Exception as e:
             raise RuntimeError(f"Gripper communication error: {e}")
 
-    def execute_joint_impedance_path(self, joint_confs: list, gripper_isopen=True,
+    def execute_joint_impedance_path(self, joint_confs: list, joint_vels: list, gripper_isopen=True,
                                      durations=None, default_duration=0.5) -> dict:
         """Execute joint impedance trajectory and wait for completion.
 
         Args:
             joint_confs: List of joint configurations (7 values each)
+            joint_vels: List of joint velocities (7 values each) for each waypoint
             gripper_isopen: Bool or list of bools for gripper state (ignored for now)
             durations: Optional list of durations (in seconds) for each waypoint.
                       If None, all waypoints use default_duration.
@@ -227,6 +233,10 @@ class BambooFrankaClient:
         try:
             logging.info(f'Executing {len(joint_confs)} joint waypoints')
 
+            # Validate joint_vels parameter
+            if joint_vels is not None and len(joint_vels) != len(joint_confs):
+                raise ValueError(f"joint_vels length ({len(joint_vels)}) must match joint_confs length ({len(joint_confs)})")
+
             # Build trajectory request with all waypoints
             trajectory_request = bamboo_service_pb2.JointImpedanceTrajectoryRequest()
             trajectory_request.default_duration = default_duration
@@ -235,6 +245,13 @@ class BambooFrankaClient:
             for i, joint_conf in enumerate(joint_confs):
                 if len(joint_conf) != 7:
                     raise ValueError(f"Joint configuration {i} must have 7 values, got {len(joint_conf)}")
+
+                # Validate joint velocity if provided
+                joint_vel = None
+                if joint_vels is not None:
+                    joint_vel = joint_vels[i]
+                    if len(joint_vel) != 7:
+                        raise ValueError(f"Joint velocity {i} must have 7 values, got {len(joint_vel)}")
 
                 # Create joint impedance control message
                 ji_msg = franka_controller_pb2.FrankaJointImpedanceControllerMessage()
@@ -275,6 +292,11 @@ class BambooFrankaClient:
                     timed_waypoint.duration = durations[i]
                 else:
                     timed_waypoint.duration = 0.0  # Use default_duration
+
+                # Set velocity for this waypoint if provided
+                if joint_vel is not None:
+                    for vel in joint_vel:
+                        timed_waypoint.velocity.append(vel)
 
                 # Add to trajectory
                 trajectory_request.waypoints.append(timed_waypoint)

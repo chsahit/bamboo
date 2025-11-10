@@ -31,6 +31,9 @@ message TimedWaypoint {
 
   // Duration for this waypoint in seconds (default: 0.5s if not specified)
   double duration = 2;
+
+  // Desired robot velocity at waypoint in rad/s (default: 0 rad/s if not specified)
+  repeated double velocity = 3;
 }
 
 // Request message for joint impedance trajectory with multiple waypoints
@@ -40,6 +43,9 @@ message JointImpedanceTrajectoryRequest {
 
   // Default duration for waypoints that don't specify their own (default: 0.5s)
   double default_duration = 2;
+
+  // Desired robot velocity for waypoints that don't specify their own (default: 0 rad/s)
+  repeated double default_velocity = 3;  
 }
 
 // Request to terminate the control node

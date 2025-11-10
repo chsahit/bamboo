@@ -20,7 +20,8 @@ public:
     // From deoxys_control/deoxys/franka-interface/src/controllers/joint_impedance.cpp
     std::array<double, 7> Step(
         const franka::RobotState& robot_state,
-        const Eigen::Matrix<double, 7, 1>& desired_q
+        const Eigen::Matrix<double, 7, 1>& desired_q,
+        const Eigen::Matrix<double, 7, 1>& desired_dq = Eigen::Matrix<double, 7, 1>::Zero()
     );
 
     // Set controller gains (optional - uses defaults if not called)

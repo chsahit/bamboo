@@ -12,6 +12,8 @@
 #include <stdexcept>
 #include <mutex>
 #include <queue>
+#include <iomanip>
+#include <cmath>
 
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
@@ -167,6 +169,7 @@ public:
 
             // Parse and prepare all waypoints
             std::vector<Eigen::Matrix<double, 7, 1>> trajectory_goals;
+            std::vector<Eigen::Matrix<double, 7, 1>> trajectory_velocities;
             std::vector<double> trajectory_durations;
 
             for (int i = 0; i < request->waypoints_size(); ++i) {
@@ -180,8 +183,23 @@ public:
                 } else if (request->default_duration() > 0) {
                     waypoint_duration = request->default_duration();
                 } else {
-                    waypoint_duration = 1.0; // Fallback default
+                    waypoint_duration = 0.5; // Fallback default
                 }
+
+                // Get waypoint velocity
+                Eigen::Matrix<double, 7, 1> waypoint_velocity = Eigen::Matrix<double, 7, 1>::Zero();
+                if (timed_waypoint.velocity_size() == 7) {
+                    // Use waypoint-specific velocity if provided
+                    for (int j = 0; j < 7; ++j) {
+                        waypoint_velocity(j) = timed_waypoint.velocity(j);
+                    }
+                } else if (request->default_velocity_size() == 7) {
+                    // Use default velocity if provided
+                    for (int j = 0; j < 7; ++j) {
+                        waypoint_velocity(j) = request->default_velocity(j);
+                    }
+                }
+                // If neither is provided, waypoint_velocity remains zero
 
                 // Check for termination
                 if (waypoint.termination() || global_shutdown) {
@@ -204,6 +222,7 @@ public:
                         ji_msg.goal().q7();
 
                 trajectory_goals.push_back(goal);
+                trajectory_velocities.push_back(waypoint_velocity);
                 trajectory_durations.push_back(waypoint_duration);
 
                 // std::cout << "[GRPC] Waypoint " << i+1 << "/" << request->waypoints_size()
@@ -211,7 +230,7 @@ public:
             }
 
             // Execute entire trajectory in single control call
-            bool success = executeTrajectory(trajectory_goals, trajectory_durations);
+            bool success = executeTrajectory(trajectory_goals, trajectory_velocities, trajectory_durations);
             if (!success) {
                 response->set_success(false);
                 return Status(grpc::StatusCode::INTERNAL,
@@ -246,6 +265,7 @@ public:
 
 private:
     bool executeTrajectory(const std::vector<Eigen::Matrix<double, 7, 1>>& goals,
+                          const std::vector<Eigen::Matrix<double, 7, 1>>& velocities,
                           const std::vector<double>& durations) {
         if (goals.empty()) return false;
 
@@ -255,6 +275,9 @@ private:
         // Current waypoint tracking
         std::size_t current_waypoint = 0;
         double waypoint_start_time = 0.0;
+
+        // Max joint error tracking
+        double max_joint_error_rad = 0.0;
 
         // Initialize first waypoint
         goal_q_ = goals[0];
@@ -296,8 +319,18 @@ private:
                 Eigen::Matrix<double, 7, 1> desired_q;
                 interpolator_->GetNextStep(control_time, desired_q);
 
+                // Get desired velocity for current waypoint
+                Eigen::Matrix<double, 7, 1> desired_dq = velocities[current_waypoint];
+
+                // Calculate and track max joint error
+                Eigen::Matrix<double, 7, 1> joint_error = desired_q - current_q_;
+                double current_max_joint_error = joint_error.cwiseAbs().maxCoeff();
+                if (current_max_joint_error > max_joint_error_rad) {
+                    max_joint_error_rad = current_max_joint_error;
+                }
+
                 // Compute control torques
-                std::array<double, 7> tau_d = controller_->Step(robot_state, desired_q);
+                std::array<double, 7> tau_d = controller_->Step(robot_state, desired_q, desired_dq);
 
                 // Apply rate limiting
                 std::array<double, 7> tau_d_rate_limited =
@@ -331,6 +364,13 @@ private:
             // Execute control
             robot_->control(control_callback);
             control_running_ = false;
+
+            // Print max joint error in degrees
+            double max_joint_error_deg = max_joint_error_rad * 180.0 / M_PI;
+            std::cout << "[CONTROL] Max joint error during trajectory: "
+                      << std::fixed << std::setprecision(2) << max_joint_error_deg
+                      << " degrees" << std::endl;
+
             return true;
         } catch (const franka::ControlException& e) {
             std::cerr << "[TRAJECTORY] Control exception: " << e.what() << std::endl;
