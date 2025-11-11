@@ -91,19 +91,22 @@ class BambooFrankaClient:
         Raises:
             RuntimeError: If no state message is received
         """
-        try:
-            # Create request
-            request = bamboo_service_pb2.RobotStateRequest()
+        exception_msg = ""
+        for _ in range(10):
+            try:
+                # Create request
+                request = bamboo_service_pb2.RobotStateRequest()
 
-            # Call gRPC service with timeout
-            response = self.stub.GetRobotState(request, timeout=1.0)
+                # Call gRPC service with timeout
+                response = self.stub.GetRobotState(request, timeout=1.0)
 
-            return response
+                return response
 
-        except grpc.RpcError as e:
-            raise RuntimeError(f"gRPC error getting robot state: {e.code()} - {e.details()}")
-        except Exception as e:
-            raise RuntimeError(f"Error receiving state from bamboo control node: {e}")
+            except grpc.RpcError as e:
+                exception_msg = f"gRPC error getting robot state: {e.code()} - {e.details()}"
+            except Exception as e:
+                exception_msg = f"Error receiving state from bamboo control node: {e}"
+        raise RuntimeError(exception_msg)
 
     def get_joint_states(self) -> dict:
         """Get current robot joint states.

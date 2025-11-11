@@ -319,8 +319,11 @@ private:
                 Eigen::Matrix<double, 7, 1> desired_q;
                 interpolator_->GetNextStep(control_time, desired_q);
 
-                // Get desired velocity for current waypoint
-                Eigen::Matrix<double, 7, 1> desired_dq = velocities[current_waypoint];
+                // Get desired velocity for current waypoint (with bounds checking)
+                Eigen::Matrix<double, 7, 1> desired_dq = Eigen::Matrix<double, 7, 1>::Zero();
+                if (current_waypoint < velocities.size()) {
+                    desired_dq = velocities[current_waypoint];
+                }
 
                 // Calculate and track max joint error
                 Eigen::Matrix<double, 7, 1> joint_error = desired_q - current_q_;
