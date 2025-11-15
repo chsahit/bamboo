@@ -91,25 +91,45 @@ class BambooFrankaClient:
         Raises:
             RuntimeError: If no state message is received
         """
-        exception_msg = ""
-        for i in range(10):
-            try:
-                # Create request
-                request = bamboo_service_pb2.RobotStateRequest()
+        try:
+            # Create request
+            request = bamboo_service_pb2.RobotStateRequest()
 
-                # Call gRPC service with timeout
+            # Call gRPC service with timeout
+            response = self.stub.GetRobotState(request, timeout=1.0)
+
+            return response
+
+        except grpc.RpcError as e:
+            raise RuntimeError(f"gRPC error getting robot state: {e.code()} - {e.details()}")
+        except Exception as e:
+            # Check if channel is closed and attempt reconnection
+            error_msg = str(e).lower()
+            if 'closed channel' in error_msg:
+                logging.warning("Channel closed, attempting to reconnect...")
+                try:
+                    # Close old channel
+                    self.channel.close()
+                except:
+                    pass
+
+                # Recreate channel and stub with keep-alive options
+                options = [
+                    ('grpc.keepalive_time_ms', 10000),
+                    ('grpc.keepalive_timeout_ms', 5000),
+                    ('grpc.keepalive_permit_without_calls', True),
+                ]
+                self.channel = grpc.insecure_channel(self.grpc_address, options=options)
+                self.stub = bamboo_service_pb2_grpc.BambooControlServiceStub(self.channel)
+
+                # Retry the request once
+                request = bamboo_service_pb2.RobotStateRequest()
                 response = self.stub.GetRobotState(request, timeout=1.0)
-                if i > 0:
-                    print(f"got response after {i + 1} attempts")
+                logging.info("Reconnected successfully")
                 return response
 
-            except grpc.RpcError as e:
-                exception_msg = f"gRPC error getting robot state: {e.code()} - {e.details()}"
-                time.sleep(0.1)
-            except Exception as e:
-                exception_msg = f"Error receiving state from bamboo control node: {e}"
-                time.sleep(0.1)
-        raise RuntimeError(exception_msg)
+            raise RuntimeError(f"Error receiving state from bamboo control node: {e}")
+
 
     def get_joint_states(self) -> dict:
         """Get current robot joint states.
@@ -166,18 +186,18 @@ class BambooFrankaClient:
         """Clean up gRPC and ZMQ resources."""
         if hasattr(self, 'channel'):
             self.channel.close()
-        if hasattr(self, 'gripper_socket') and self.gripper_socket is not None:
-            # Set linger to 0 on the socket before closing
-            self.gripper_socket.setsockopt(zmq.LINGER, 0)
-            self.gripper_socket.close()
-        if hasattr(self, 'zmq_context') and self.zmq_context is not None:
-            try:
-                # Set linger to 0 to avoid hanging on context termination
-                self.zmq_context.setsockopt(zmq.LINGER, 0)
-                self.zmq_context.term()
-            except Exception:
-                # If context termination hangs, just destroy it
-                self.zmq_context.destroy()
+        # if hasattr(self, 'gripper_socket') and self.gripper_socket is not None:
+        #     # Set linger to 0 on the socket before closing
+        #     self.gripper_socket.setsockopt(zmq.LINGER, 0)
+        #     self.gripper_socket.close()
+        # if hasattr(self, 'zmq_context') and self.zmq_context is not None:
+        #     try:
+        #         # Set linger to 0 to avoid hanging on context termination
+        #         self.zmq_context.setsockopt(zmq.LINGER, 0)
+        #         self.zmq_context.term()
+        #     except Exception:
+        #         # If context termination hangs, just destroy it
+        #         self.zmq_context.destroy()
 
     def __enter__(self):
         """Context manager entry."""
