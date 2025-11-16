@@ -2,8 +2,6 @@
 """
 Simple example that commands a 0.1 radian offset to all joints
 using Joint Impedance control with Min-Jerk interpolation.
-
-Based on deoxys_control examples.
 """
 
 import time
@@ -12,7 +10,6 @@ import zmq
 import numpy as np
 
 # Import protobuf messages (need to generate from proto files first)
-# These are copied from deoxys_control
 sys.path.insert(0, '../proto')
 import franka_controller_pb2
 
@@ -41,7 +38,6 @@ def create_joint_impedance_message(joint_positions):
     ji_msg = franka_controller_pb2.FrankaJointImpedanceControllerMessage()
     ji_msg.goal.CopyFrom(joint_goal)
 
-    # Set default gains from deoxys config
     ji_msg.kp.extend([100.0, 100.0, 100.0, 100.0, 75.0, 150.0, 50.0])
     ji_msg.kd.extend([20.0, 20.0, 20.0, 20.0, 7.5, 15.0, 5.0])
     ji_msg.joint_tau_limits.extend([10.0, 10.0, 10.0, 10.0, 10.0, 5.0, 5.0])

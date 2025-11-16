@@ -1,6 +1,3 @@
-// Copyright 2022 Yifeng Zhu
-// Copied from deoxys_control/deoxys/franka-interface/include/utils/traj_interpolators/linear_joint_position_traj_interpolator.h
-
 #ifndef BAMBOO_LINEAR_JOINT_POSITION_INTERPOLATOR_H_
 #define BAMBOO_LINEAR_JOINT_POSITION_INTERPOLATOR_H_
 

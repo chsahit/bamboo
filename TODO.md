@@ -1,12 +1,14 @@
-- [ ] cleanup references to deoxys line numbers
+- [x] cleanup references to deoxys line numbers
 - [x] protobuf build should not show up in examples/ directory
 - [ ] add compilation instructions for debugging / general compilation instructions (Quickstart)
 - [ ] mention caveat with needing sudo for install
 - [x] document control frequency parameters
 - [ ] document warnings that come up normally when building
-- [ ] tag zmqpp to a version
 - [ ] linting + git protections + release tag
 - [ ] Contributing.md ?
+- [ ] Check that all the examples run after migrating
+- [ ] move gripper to GRPC
+- [ ] bamboo client is sending joint impedances that are not used?
 - [x] remove minimal_joint_impedance example
 - [x] move libfranka to third party and zmqpp to third_party? maybe?
 - [x] move source files out of TLD

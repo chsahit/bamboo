@@ -80,7 +80,6 @@ bamboo/
 │   ├── include/
 │   ├── proto/
 │   └── CMakeLists.txt
-├── minimal_joint_impedance/ # Minimal C++ example
 ├── pyproject.toml          # Python package configuration
 └── README.md
 ```

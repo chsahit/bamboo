@@ -146,15 +146,11 @@ class BambooFrankaClient:
             qpos = list(state_msg.q)  # Convert to list for JSON serialization
 
             # Extract end-effector pose (4x4 transformation matrix)
-            if len(state_msg.O_T_EE) == 16:
-                # Convert flat array to 4x4 matrix and transpose to match deoxys format
-                ee_pose_flat = list(state_msg.O_T_EE)
-                ee_pose_matrix = np.array(ee_pose_flat).reshape(4, 4)
-                # Transpose to match deoxys format (column-major to row-major)
-                ee_pose = ee_pose_matrix.T.tolist()
-            else:
-                # Fallback: identity matrix if pose data is missing
-                ee_pose = np.eye(4).tolist()
+            # Convert flat array to 4x4 matrix (column-major)
+            ee_pose_flat = list(state_msg.O_T_EE)
+            ee_pose_matrix = np.array(ee_pose_flat).reshape(4, 4)
+            # Transpose from column-major to row-major
+            ee_pose = ee_pose_matrix.T.tolist()
             # Get gripper state if available, otherwise use default
             if self.enable_gripper and self.gripper_socket is not None:
                 try:
@@ -169,7 +165,7 @@ class BambooFrankaClient:
                 gripper_state = 0.0  # No gripper enabled
 
             return {
-                'success': True,  # Hardcoded to True as requested
+                'success': True,
                 'ee_pose': ee_pose,
                 'qpos': qpos,
                 'gripper_state': gripper_state
@@ -295,7 +291,7 @@ class BambooFrankaClient:
                 goal.q6 = joint_conf[5]
                 goal.q7 = joint_conf[6]
 
-                # Set default impedance parameters (matching deoxys defaults)
+                # Set default impedance parameters
                 for _ in range(7):
                     ji_msg.kp.append(600.0)  # Default stiffness
                     ji_msg.kd.append(50.0)   # Default damping

@@ -1,5 +1,4 @@
 // Joint Impedance Controller
-// Adapted from deoxys_control/deoxys/franka-interface/include/controllers/joint_impedance.h
 
 #ifndef BAMBOO_JOINT_IMPEDANCE_CONTROLLER_H
 #define BAMBOO_JOINT_IMPEDANCE_CONTROLLER_H
@@ -17,7 +16,6 @@ public:
     JointImpedanceController(franka::Model* model);
 
     // Compute torque command given current state and desired joint position
-    // From deoxys_control/deoxys/franka-interface/src/controllers/joint_impedance.cpp
     std::array<double, 7> Step(
         const franka::RobotState& robot_state,
         const Eigen::Matrix<double, 7, 1>& desired_q,
@@ -33,11 +31,11 @@ public:
 private:
     franka::Model* model_;
 
-    // Controller gains - using deoxys_control defaults
+    // Controller gains 
     Eigen::Matrix<double, 7, 1> Kp_;
     Eigen::Matrix<double, 7, 1> Kd_;
 
-    // Joint limits - from deoxys_control
+    // Joint limits
     Eigen::Matrix<double, 7, 1> joint_max_;
     Eigen::Matrix<double, 7, 1> joint_min_;
 

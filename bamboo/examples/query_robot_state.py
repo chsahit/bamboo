@@ -2,7 +2,7 @@
 
 """
 Example script demonstrating how to receive robot joint angles from bamboo control node.
-This script subscribes to the continuous robot state stream (like deoxys_control).
+This script subscribes to the continuous robot state stream
 """
 
 import zmq

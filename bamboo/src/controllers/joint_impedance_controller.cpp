@@ -1,5 +1,4 @@
 // Joint Impedance Controller Implementation
-// Adapted from deoxys_control/deoxys/franka-interface/src/controllers/joint_impedance.cpp
 
 #include "controllers/joint_impedance_controller.h"
 #include <iostream>
@@ -70,20 +69,6 @@ std::array<double, 7> JointImpedanceController::Step(
         Kp_.cwiseProduct(joint_pos_error) + Kd_.cwiseProduct(joint_vel_error) + coriolis;
 
 
-    // Zero torque when approaching joint limits (within 0.1 rad)
-    Eigen::Matrix<double, 7, 1> dist2joint_max = joint_max_ - current_q;
-    Eigen::Matrix<double, 7, 1> dist2joint_min = current_q - joint_min_;
-
-    /*
-    for (int i = 0; i < 7; i++) {
-        if (dist2joint_max[i] < 0.1 && tau_d[i] > 0.0) {
-            tau_d[i] = 0.0;
-        }
-        if (dist2joint_min[i] < 0.1 && tau_d[i] < 0.0) {
-            tau_d[i] = 0.0;
-        }
-    }
-    */
     // Apply torque limits
     for (int i = 0; i < 7; i++) {
         if (tau_d[i] > joint_tau_limits_[i]) {
