@@ -34,6 +34,8 @@ dependencies = [
     # Communication and messaging
     "pyzmq>=22.0.0",
     "protobuf>=3.12.0",
+    "grpcio>=1.50.0",
+    "grpcio-tools>=1.50.0",
 
     # Hardware communication
     "pyserial>=3.4",
