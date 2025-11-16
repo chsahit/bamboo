@@ -134,22 +134,6 @@ message FrankaCartesianVelocityControllerMessage {
   double speed_factor=4;
 }
 
-// TODO(Yifeng) Placeholder for now
-
-message FrankaJointVelocityControllerMessage {
-  JointGoal goal = 1;
-  double kp_gains = 2;
-  double kd_gains = 3;
-}
-
-// TODO(Yifeng) Placeholder for now
-
-message FrankaJointTorqueControllerMessage {
-  JointGoal goal = 1;
-  double kp_gains = 2;
-  double kd_gains = 3;
-}
-
 // Unified message interface for arm control
 message FrankaControlMessage {
   bool termination = 1;
@@ -159,10 +143,8 @@ message FrankaControlMessage {
     OSC_POSITION = 2;
     JOINT_POSITION = 3;
     JOINT_IMPEDANCE = 4;
-    JOINT_VELOCITY = 5;
-    TORQUE = 6;
-    OSC_YAW = 7;
-    CARTESIAN_VELOCITY = 8;
+    OSC_YAW = 5;
+    CARTESIAN_VELOCITY = 6;
   }
   ControllerType controller_type = 2;
   enum TrajInterpolatorType {
