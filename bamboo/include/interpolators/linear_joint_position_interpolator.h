@@ -26,14 +26,15 @@ private:
   bool start_;
   bool first_goal_;
 
-  double interpolation_fraction_; // fraction of actual interpolation within an interval
+  double interpolation_fraction_; // fraction of actual interpolation within an
+                                  // interval
 
 public:
   inline LinearJointPositionInterpolator()
       : dt_(0.), last_time_(0.), max_time_(1.), start_time_(0.), start_(false),
-        first_goal_(true){};
+        first_goal_(true) {};
 
-  inline ~LinearJointPositionInterpolator(){};
+  inline ~LinearJointPositionInterpolator() {};
 
   inline void Reset(const double &time_sec,
                     const Eigen::Matrix<double, 7, 1> &q_start,
@@ -77,7 +78,7 @@ public:
   };
 };
 
-}  // namespace interpolators
-}  // namespace bamboo
+} // namespace interpolators
+} // namespace bamboo
 
-#endif  // BAMBOO_LINEAR_JOINT_POSITION_INTERPOLATOR_H_
+#endif // BAMBOO_LINEAR_JOINT_POSITION_INTERPOLATOR_H_

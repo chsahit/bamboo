@@ -1,0 +1,24 @@
+repos:
+  # Python (ruff)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.4
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+        exclude: ^(third_party/|bamboo/proto_gen/)
+
+  # Type checking (mypy)
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.2
+    hooks:
+      - id: mypy
+        exclude: ^(third_party/|bamboo/proto_gen/)
+        additional_dependencies: [types-protobuf]
+
+  # C/C++ formatting
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v18.1.8
+    hooks:
+      - id: clang-format
+        files: "\\.(c|cc|cpp|cxx|h|hh|hpp)$"
+        exclude: ^(third_party/|bamboo/proto_gen/)

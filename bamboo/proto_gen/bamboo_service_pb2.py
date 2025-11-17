@@ -22,7 +22,6 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-import franka_controller_pb2 as franka__controller__pb2
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x14\x62\x61mboo_service.proto\x12\x06\x62\x61mboo\x1a\x17\x66ranka_controller.proto\"\x13\n\x11RobotStateRequest\"\\\n\rTimedWaypoint\x12\'\n\x08waypoint\x18\x01 \x01(\x0b\x32\x15.FrankaControlMessage\x12\x10\n\x08\x64uration\x18\x02 \x01(\x01\x12\x10\n\x08velocity\x18\x03 \x03(\x01\"\x7f\n\x1fJointImpedanceTrajectoryRequest\x12(\n\twaypoints\x18\x01 \x03(\x0b\x32\x15.bamboo.TimedWaypoint\x12\x18\n\x10\x64\x65\x66\x61ult_duration\x18\x02 \x01(\x01\x12\x18\n\x10\x64\x65\x66\x61ult_velocity\x18\x03 \x03(\x01\"\x12\n\x10TerminateRequest2\xff\x01\n\x14\x42\x61mbooControlService\x12\x44\n\rGetRobotState\x12\x19.bamboo.RobotStateRequest\x1a\x18.FrankaRobotStateMessage\x12\x62\n\x1f\x45xecuteJointImpedanceTrajectory\x12\'.bamboo.JointImpedanceTrajectoryRequest\x1a\x16.FrankaCommandResponse\x12=\n\tTerminate\x12\x18.bamboo.TerminateRequest\x1a\x16.FrankaCommandResponseb\x06proto3')

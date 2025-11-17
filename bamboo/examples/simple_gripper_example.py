@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from bamboo_client import BambooFrankaClient
 
-def main():
+def main() -> None:
     # Connect to bamboo control node and gripper server
     with BambooFrankaClient(
         control_port=5556,      # Bamboo control node port

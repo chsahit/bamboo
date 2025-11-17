@@ -30,18 +30,18 @@ private:
 public:
   inline MinJerkInterpolator()
       : dt_(0.), last_time_(0.), max_time_(1.), start_time_(0.), start_(false),
-        first_goal_(true), do_min_jerk_(false){};
+        first_goal_(true), do_min_jerk_(false) {};
 
-  inline ~MinJerkInterpolator(){};
+  inline ~MinJerkInterpolator() {};
 
   inline void Reset(const double &time_sec,
                     const Eigen::Matrix<double, 7, 1> &q_start,
-                    const Eigen::Matrix<double, 7, 1> &q_goal,
-                    const int &rate, const double &max_time) {
+                    const Eigen::Matrix<double, 7, 1> &q_goal, const int &rate,
+                    const double &max_time) {
     dt_ = 1. / static_cast<double>(rate);
     last_time_ = time_sec;
     start_time_ = time_sec;
-    max_time_ = max_time; 
+    max_time_ = max_time;
 
     start_ = false;
 
@@ -69,7 +69,8 @@ public:
       // Min-jerk 5th-order polynomial transformation
       double transformed_t = t;
       if (do_min_jerk_) {
-        transformed_t = 10 * std::pow(t, 3) - 15 * std::pow(t, 4) + 6 * std::pow(t, 5);
+        transformed_t =
+            10 * std::pow(t, 3) - 15 * std::pow(t, 4) + 6 * std::pow(t, 5);
       }
 
       last_q_t_ = q_start_ + transformed_t * (q_goal_ - q_start_);
@@ -79,7 +80,7 @@ public:
   };
 };
 
-}  // namespace interpolators
-}  // namespace bamboo
+} // namespace interpolators
+} // namespace bamboo
 
-#endif  // BAMBOO_MIN_JERK_INTERPOLATOR_H_
+#endif // BAMBOO_MIN_JERK_INTERPOLATOR_H_

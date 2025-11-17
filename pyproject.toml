@@ -41,9 +41,7 @@ dependencies = [
     "pyserial>=3.4",
     "pymodbus==2.5.3",
 
-    # Optional robotics utilities
-    "scipy>=1.7.0",
-    "matplotlib>=3.3.0",
+    "pre-commit",
 ]
 
 [project.optional-dependencies]
@@ -57,22 +55,21 @@ dev = [
     "mypy>=0.800",
 ]
 
-robotics = [
-    # Additional robotics libraries
-    "robotics-toolbox-python>=1.0.0",
-    "spatialmath-python>=1.0.0",
-    "pinocchio>=2.6.0",  # If available via pip
-]
-
 visualization = [
     # Plotting and visualization
     "matplotlib>=3.3.0",
-    "plotly>=5.0.0",
-    "seaborn>=0.11.0",
 ]
 
 all = [
-    "bamboo-franka-controller[dev,robotics,visualization]"
+    # Development dependencies
+    "black>=21.0.0",
+    "isort>=5.0.0",
+    "flake8>=3.8.0",
+    "mypy>=0.800",
+    # Visualization dependencies
+    "matplotlib>=3.3.0",
+    "plotly>=5.0.0",
+    "seaborn>=0.11.0",
 ]
 
 [project.urls]

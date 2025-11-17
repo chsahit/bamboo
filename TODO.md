@@ -1,13 +1,14 @@
-- [ ] pre-commit
 - [ ] Contributing.md ?
 - [ ] add compilation instructions for debugging / general compilation instructions (Quickstart)
 - [ ] mention caveat with needing sudo for install
 - [ ] document warnings that come up normally when building
 - [ ] Check that all the examples run after migrating
 - [ ] move gripper to GRPC
+- [ ] put gripper and robot in the same script
 - [ ] bamboo client is sending joint impedances that are not used?
 - [ ] delete unused proto defs
-- [ ] git protections + release tag + mypy?
+- [ ] git protections + release tag
+- [x] pre-commit + mypy
 - [x] cleanup references to deoxys line numbers
 - [x] protobuf build should not show up in examples/ directory
 - [x] document control frequency parameters

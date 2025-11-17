@@ -83,7 +83,7 @@ class GripperServer:
             logging.error(f"Error handling command {command}: {e}")
             return {"success": False, "error": str(e)}
 
-    def run(self):
+    def run(self) -> None:
         """Main server loop."""
         logging.info("Gripper server ready to receive commands...")
 
@@ -116,7 +116,7 @@ class GripperServer:
         finally:
             self.cleanup()
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Clean up resources."""
         logging.info("Cleaning up gripper server...")
         if hasattr(self, 'socket'):
@@ -125,7 +125,7 @@ class GripperServer:
             self.context.term()
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Gripper Server for Robotiq control")
     parser.add_argument("--gripper-port", default="/dev/ttyUSB0", type=str,
                        help="Serial port for Robotiq gripper")
@@ -143,7 +143,7 @@ def main():
     )
 
     print("=" * 60)
-    print(f"Starting Gripper Server")
+    print("Starting Gripper Server")
     print(f"Gripper port: {args.gripper_port}")
     print(f"ZMQ port: {args.zmq_port}")
     print("=" * 60)

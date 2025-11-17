@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from bamboo_client import BambooFrankaClient
 
-def main():
+def main() -> int:
     # Set up logging
     logging.basicConfig(
         level=logging.INFO,
@@ -42,11 +42,11 @@ def main():
             durations = [0.7]
             for _ in range(30):
                 waypoint = [q + 0.01 for q in waypoints[-1]]
-                waypoints.append(waypoint) 
+                waypoints.append(waypoint)
                 durations.append(durations[-1] - 0.02)
             for _ in range(30):
                 waypoint = [q - 0.01 for q in waypoints[-1]]
-                waypoints.append(waypoint) 
+                waypoints.append(waypoint)
                 durations.append(durations[-1] + 0.03)
 
 

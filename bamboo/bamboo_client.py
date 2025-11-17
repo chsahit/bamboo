@@ -6,6 +6,8 @@ Provides the same API as BambooFrankaClient but uses gRPC instead of ZMQ for arm
 Gripper communication still uses ZMQ (unchanged).
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import sys
@@ -14,6 +16,7 @@ import zmq
 import numpy as np
 from pathlib import Path
 import grpc
+from typing import Optional, TypedDict
 
 # Add the proto_gen directory to path to import protobuf messages
 sys.path.insert(0, str(Path(__file__).parent / "proto_gen"))
@@ -27,6 +30,14 @@ except ImportError:
         "Could not import protobuf messages. Make sure the bamboo project is built. "
         "Run 'make' in the build directory first."
     )
+
+
+class JointStates(TypedDict, total=False):
+    """Type definition for joint states dictionary."""
+    success: bool
+    ee_pose: list[list[float]]
+    qpos: list[float]
+    gripper_state: float
 
 
 class BambooFrankaClient:
@@ -70,7 +81,7 @@ class BambooFrankaClient:
         # Test connection by trying to receive a state message
         self._test_connection()
 
-    def _test_connection(self):
+    def _test_connection(self) -> None:
         """Test connection to the bamboo control node and warm up the gRPC connection."""
         try:
             # Try to receive a state message to verify connection and warm up gRPC
@@ -82,7 +93,7 @@ class BambooFrankaClient:
             logging.warning(f"Could not connect to bamboo control node at {self.grpc_address}: {e}")
             logging.warning("Make sure the bamboo control node is running.")
 
-    def _get_latest_state(self):
+    def _get_latest_state(self) -> bamboo_service_pb2.RobotStateRequest:
         """Get the latest robot state from the bamboo control node.
 
         Returns:
@@ -110,8 +121,8 @@ class BambooFrankaClient:
                 try:
                     # Close old channel
                     self.channel.close()
-                except:
-                    pass
+                except Exception as closing_err:
+                    print(f"warning, exception hit: {closing_err}")
 
                 # Recreate channel and stub with keep-alive options
                 options = [
@@ -131,7 +142,7 @@ class BambooFrankaClient:
             raise RuntimeError(f"Error receiving state from bamboo control node: {e}")
 
 
-    def get_joint_states(self) -> dict:
+    def get_joint_states(self) -> JointStates:
         """Get current robot joint states.
 
         Returns:
@@ -175,10 +186,9 @@ class BambooFrankaClient:
             logging.error(f"Error in get_joint_states: {e}")
             return {
                 "success": False,
-                "error": str(e)
             }
 
-    def close(self):
+    def close(self) -> None:
         """Clean up gRPC and ZMQ resources."""
         if hasattr(self, 'channel'):
             self.channel.close()
@@ -195,11 +205,16 @@ class BambooFrankaClient:
         #         # If context termination hangs, just destroy it
         #         self.zmq_context.destroy()
 
-    def __enter__(self):
+    def __enter__(self) -> BambooFrankaClient:
         """Context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object | None,
+    ) -> None:
         """Context manager exit."""
         self.close()
 
@@ -229,15 +244,15 @@ class BambooFrankaClient:
             response_str = self.gripper_socket.recv_string()
             response = json.loads(response_str)
 
-            return response
+            return response  # type: ignore[no-any-return]
 
         except zmq.Again:
             raise RuntimeError("Timeout waiting for gripper server response")
         except Exception as e:
             raise RuntimeError(f"Gripper communication error: {e}")
 
-    def execute_joint_impedance_path(self, joint_confs: list, joint_vels=None, gripper_isopen=True,
-                                     durations=None, default_duration=0.5) -> dict:
+    def execute_joint_impedance_path(self, joint_confs: list, joint_vels: Optional[list]=None, gripper_isopen: bool=True,
+            durations: Optional[list]=None, default_duration:float=0.5) -> dict:
         """Execute joint impedance trajectory and wait for completion.
 
         Args:
@@ -405,7 +420,7 @@ class BambooFrankaClient:
             return {"success": False, "error": str(e)}
 
 
-def main():
+def main() -> None:
     """Simple test of the BambooFrankaClient."""
     import argparse
 

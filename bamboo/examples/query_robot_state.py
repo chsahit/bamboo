@@ -20,7 +20,7 @@ except ImportError:
     print("Run 'make' in the build directory first.")
     sys.exit(1)
 
-def subscribe_robot_state(control_port="5556", num_samples=10):
+def subscribe_robot_state(control_port: str="5556", num_samples: int=10) -> None:
     """
     Subscribe to the robot state stream from the control node.
 
@@ -83,7 +83,7 @@ def subscribe_robot_state(control_port="5556", num_samples=10):
     sub_socket.close()
     context.term()
 
-def print_latest_state(control_port="5556"):
+def print_latest_state(control_port: str="5556") -> None:
     """
     Print just the latest robot state (single sample).
     """
@@ -105,17 +105,17 @@ def print_latest_state(control_port="5556"):
         for i, q in enumerate(state_msg.q):
             print(f"  Joint {i+1}: {q:.6f} rad ({q*180/3.14159:.2f} deg)")
 
-        print(f"\nJoint velocities:")
+        print("\nJoint velocities:")
         for i, dq in enumerate(state_msg.dq):
             print(f"  Joint {i+1}: {dq:.6f} rad/s")
 
-        print(f"\nJoint torques:")
+        print("\nJoint torques:")
         for i, tau in enumerate(state_msg.tau_J):
             print(f"  Joint {i+1}: {tau:.6f} Nm")
 
         # Print end-effector pose
         if len(state_msg.O_T_EE) == 16:
-            print(f"\nEnd-effector pose (O_T_EE) - 4x4 matrix:")
+            print("\nEnd-effector pose (O_T_EE) - 4x4 matrix:")
             for row in range(4):
                 row_values = []
                 for col in range(4):
@@ -125,7 +125,7 @@ def print_latest_state(control_port="5556"):
 
             # Extract position (last column, first 3 elements)
             x, y, z = state_msg.O_T_EE[12], state_msg.O_T_EE[13], state_msg.O_T_EE[14]
-            print(f"\nEnd-effector position:")
+            print("\nEnd-effector position:")
             print(f"  X: {x:.6f} m")
             print(f"  Y: {y:.6f} m")
             print(f"  Z: {z:.6f} m")
