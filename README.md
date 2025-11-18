@@ -1,6 +1,6 @@
 # Bamboo Franka Controller
 
-A Python package for controlling Franka robots using joint impedance control with ZMQ communication to C++ control nodes.
+A Python package for controlling Franka robots using joint impedance control with GRPC to a C++ control node.
 
 ## Installation
 
@@ -25,18 +25,6 @@ pip install -e ".[all]"
 pip install bamboo-franka-controller
 ```
 
-## Dependencies
-
-### Core Dependencies
-- **numpy**: Numerical computing
-- **pyzmq**: ZeroMQ Python bindings for communication
-- **protobuf**: Protocol Buffers for message serialization
-
-### Optional Dependencies
-- **robotics**: Robotics libraries (robotics-toolbox-python, spatialmath-python)
-- **visualization**: Plotting and visualization tools
-- **dev**: Development and testing tools
-
 ## Usage
 
 ### C++ Control Node
@@ -54,34 +42,10 @@ Example:
 
 ### Python Scripts
 
-#### Using the installed package
-```bash
-bamboo-test-joint-offset 5555
-```
-
 #### Running directly
 ```bash
 cd bamboo/examples
 python test_joint_offset.py 5555
-```
-
-## Project Structure
-
-```
-bamboo/
-├── bamboo/                 # Main Python package
-│   ├── examples/           # Example scripts
-│   │   ├── test_joint_offset.py
-│   │   ├── franka_controller_pb2.py
-│   │   └── franka_robot_state_pb2.py
-│   └── __init__.py
-├── bamboo/                 # C++ source (separate from Python package)
-│   ├── src/
-│   ├── include/
-│   ├── proto/
-│   └── CMakeLists.txt
-├── pyproject.toml          # Python package configuration
-└── README.md
 ```
 
 ## Requirements
@@ -91,19 +55,29 @@ bamboo/
 - Built C++ control node (`bamboo_control_node`)
 - Franka robot connected to network
 
-## Development
+## Contributing 
+For the python code we enforce style with `ruff` and typechecking with `mypy`. For the C++ code, we enforce style with `clang-tidy`. You can run all linting and checking steps with `pre-commit run --all-files`, they also will run automatically when you make a commit. 
 
-```bash
-# Install development dependencies
-pip install -e ".[dev]"
+To contribute, please create a fork of the repository, make a feature branch based on main, and commit your changes there. Then open a pull request from that branch.
 
-# Run tests
-pytest
-
-# Format code
-black bamboo/
-isort bamboo/
-
-# Type checking
-mypy bamboo/
-```
+## TODO
+- [ ] tune kp/kd to be stiffer
+- [ ] add compilation instructions for debugging / general compilation instructions (Quickstart)
+- [ ] mention caveat with needing sudo for install
+- [ ] document warnings that come up normally when building
+- [ ] Check that all the examples run after migrating
+- [ ] move gripper to GRPC
+- [ ] put gripper and robot in the same script
+- [ ] bamboo client is sending joint impedances that are not used?
+- [ ] delete unused proto defs
+- [ ] make sure examples work
+- [ ] update README
+- [ ] git protections + release tag
+- [ ] contributing notes
+- [x] pre-commit + mypy
+- [x] cleanup references to deoxys line numbers
+- [x] protobuf build should not show up in examples/ directory
+- [x] document control frequency parameters
+- [x] remove minimal_joint_impedance example
+- [x] move libfranka to third party and zmqpp to third_party? maybe?
+- [x] move source files out of TLD
