@@ -9,16 +9,19 @@ namespace controllers {
 JointImpedanceController::JointImpedanceController(franka::Model *model)
     : model_(model), first_state_(true), alpha_q_(0.9), alpha_dq_(0.9) {
 
-  Kp_ << 100.0, 100.0, 100.0, 100.0, 75.0, 150.0, 50.0;
-  Kd_ << 20.0, 20.0, 20.0, 20.0, 7.5, 15.0, 5.0;
+  // Kp_ << 100.0, 100.0, 100.0, 100.0, 75.0, 150.0, 50.0;
+  // Kd_ << 20.0, 20.0, 20.0, 20.0, 7.5, 15.0, 5.0;
 
   // Kp_ << 300.0, 200.0, 200.0, 200.0, 150.0, 300.0, 100.0;
-  // Kd_ << 40.0, 30.0, 30.0, 30.0, 12, 25.0, 8.0;
+  // Kd_ = 3.0 * Kp_.cwiseSqrt();
+
+  Kp_ << 600.0, 600.0, 600.0, 600.0, 250.0, 150.0, 50.0;
+  Kd_ << 50.0, 50.0, 50.0, 50.0, 30.0, 25.0, 15.0;
 
   joint_max_ << 2.8978, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973;
   joint_min_ << -2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973;
 
-  joint_tau_limits_ << 30.0, 30.0, 30.0, 30.0, 30.0, 15.0, 15.0;
+  joint_tau_limits_ << 60.0, 60.0, 60.0, 60.0, 30.0, 15.0, 15.0;
 
   smoothed_q_.setZero();
   smoothed_dq_.setZero();
@@ -71,8 +74,12 @@ JointImpedanceController::Step(const franka::RobotState &robot_state,
   // Apply torque limits
   for (int i = 0; i < 7; i++) {
     if (tau_d[i] > joint_tau_limits_[i]) {
+      std::cout << "[TORQUE_LIMIT] Joint " << i << " hit upper limit: "
+                << tau_d[i] << " -> " << joint_tau_limits_[i] << " Nm" << std::endl;
       tau_d[i] = joint_tau_limits_[i];
     } else if (tau_d[i] < -joint_tau_limits_[i]) {
+      std::cout << "[TORQUE_LIMIT] Joint " << i << " hit lower limit: "
+                << tau_d[i] << " -> " << -joint_tau_limits_[i] << " Nm" << std::endl;
       tau_d[i] = -joint_tau_limits_[i];
     }
   }
