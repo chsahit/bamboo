@@ -284,7 +284,7 @@ private:
     std::size_t current_waypoint = 0;
     double waypoint_start_time = 0.0;
 
-    // Max joint error tracking
+    // Max joint error tracking (across waypoint final errors)
     double max_joint_error_rad = 0.0;
 
     // Initialize first waypoint
@@ -308,6 +308,18 @@ private:
         // Check if current waypoint is complete
         double waypoint_elapsed = control_time - waypoint_start_time;
         if (waypoint_elapsed >= durations[current_waypoint]) {
+          // Log joint error for waypoint that timed out
+          Eigen::Matrix<double, 7, 1> waypoint_error = goal_q_ - current_q_;
+          double waypoint_final_error_rad = waypoint_error.cwiseAbs().maxCoeff();
+          double waypoint_final_error_deg = waypoint_final_error_rad * 180.0 / M_PI;
+          std::cout << "Final joint error: " << std::fixed << std::setprecision(2)
+                    << waypoint_final_error_deg << " degrees" << std::endl;
+
+          // Update max error across all waypoints
+          if (waypoint_final_error_rad > max_joint_error_rad) {
+            max_joint_error_rad = waypoint_final_error_rad;
+          }
+
           // Move to next waypoint
           current_waypoint++;
 
@@ -388,9 +400,9 @@ private:
       robot_->control(control_callback);
       control_running_ = false;
 
-      // Print max joint error in degrees
+      // Print max joint error across all waypoint final errors
       double max_joint_error_deg = max_joint_error_rad * 180.0 / M_PI;
-      std::cout << "[CONTROL] Max joint error during trajectory: " << std::fixed
+      std::cout << "[CONTROL] Max final waypoint error: " << std::fixed
                 << std::setprecision(2) << max_joint_error_deg << " degrees"
                 << std::endl;
 
