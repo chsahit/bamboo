@@ -7,13 +7,14 @@ namespace bamboo {
 namespace controllers {
 
 JointImpedanceController::JointImpedanceController(franka::Model *model)
-    : model_(model), first_state_(true), alpha_q_(0.9), alpha_dq_(0.9) {
+    : model_(model), first_state_(true), alpha_q_(1.0), alpha_dq_(0.95) {
 
   // Kp_ << 100.0, 100.0, 100.0, 100.0, 75.0, 150.0, 50.0;
   // Kd_ << 20.0, 20.0, 20.0, 20.0, 7.5, 15.0, 5.0;
 
-  Kp_ << 600.0, 600.0, 600.0, 600.0, 250.0, 100.0, 50.0;
-  Kd_ << 50.0, 50.0, 50.0, 50.0, 30.0, 15.0, 10.0;
+  // This seems to be better
+  Kp_ << 600.0, 600.0, 600.0, 300.0, 250.0, 100.0, 50.0;
+  Kd_ << 20.0, 20.0, 20.0, 20.0, 7.5, 15.0, 5.0;
 
   joint_max_ << 2.8978, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973;
   joint_min_ << -2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973;
@@ -64,6 +65,7 @@ JointImpedanceController::Step(const franka::RobotState &robot_state,
   Eigen::Matrix<double, 7, 1> joint_vel_error = desired_dq - current_dq;
 
   // tau = Kp * (q_desired - q) + Kd * (dq_desired - dq) + coriolis
+  // NOTE: Franka already does automatic gravity compensation, so we don't add it here
   Eigen::Matrix<double, 7, 1> tau_d = Kp_.cwiseProduct(joint_pos_error) +
                                       Kd_.cwiseProduct(joint_vel_error) +
                                       coriolis;
