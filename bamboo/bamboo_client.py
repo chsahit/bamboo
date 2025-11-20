@@ -18,6 +18,8 @@ from pathlib import Path
 import grpc
 from typing import Optional, TypedDict
 
+_log = logging.getLogger(__name__)
+
 # Add the proto_gen directory to path to import protobuf messages
 sys.path.insert(0, str(Path(__file__).parent / "proto_gen"))
 
@@ -76,7 +78,7 @@ class BambooFrankaClient:
             self.gripper_socket = self.zmq_context.socket(zmq.REQ)
             self.gripper_socket.connect(f"tcp://{self.server_ip}:{gripper_port}")
             self.gripper_socket.setsockopt(zmq.RCVTIMEO, 5000)  # 5 second timeout
-            logging.info(f"Gripper client connected to {self.server_ip}:{gripper_port}")
+            _log.debug(f"Gripper client connected to {self.server_ip}:{gripper_port}")
 
         # Test connection by trying to receive a state message
         self._test_connection()
@@ -86,12 +88,12 @@ class BambooFrankaClient:
         try:
             # Try to receive a state message to verify connection and warm up gRPC
             # This first call will be slow as it establishes the connection
-            logging.info(f"Establishing connection to bamboo control node at {self.grpc_address}...")
+            _log.debug(f"Establishing connection to bamboo control node at {self.grpc_address}...")
             self._get_latest_state()
-            logging.info(f"Successfully connected to bamboo control node at {self.grpc_address}")
+            _log.info(f"Successfully connected to bamboo control node at {self.grpc_address}")
         except Exception as e:
-            logging.warning(f"Could not connect to bamboo control node at {self.grpc_address}: {e}")
-            logging.warning("Make sure the bamboo control node is running.")
+            _log.warning(f"Could not connect to bamboo control node at {self.grpc_address}: {e}")
+            _log.warning("Make sure the bamboo control node is running.")
 
     def _get_latest_state(self) -> bamboo_service_pb2.RobotStateRequest:
         """Get the latest robot state from the bamboo control node.
@@ -117,7 +119,7 @@ class BambooFrankaClient:
             # Check if channel is closed and attempt reconnection
             error_msg = str(e).lower()
             if 'closed channel' in error_msg:
-                logging.warning("Channel closed, attempting to reconnect...")
+                _log.warning("Channel closed, attempting to reconnect...")
                 try:
                     # Close old channel
                     self.channel.close()
@@ -136,7 +138,7 @@ class BambooFrankaClient:
                 # Retry the request once
                 request = bamboo_service_pb2.RobotStateRequest()
                 response = self.stub.GetRobotState(request, timeout=1.0)
-                logging.info("Reconnected successfully")
+                _log.info("Reconnected successfully")
                 return response
 
             raise RuntimeError(f"Error receiving state from bamboo control node: {e}")
@@ -183,7 +185,7 @@ class BambooFrankaClient:
             }
 
         except Exception as e:
-            logging.error(f"Error in get_joint_states: {e}")
+            _log.error(f"Error in get_joint_states: {e}")
             return {
                 "success": False,
             }
@@ -268,7 +270,7 @@ class BambooFrankaClient:
             Dict with 'success' (bool) and 'error' (str) if failed
         """
         try:
-            logging.info(f'Executing {len(joint_confs)} joint waypoints')
+            _log.debug(f'Executing {len(joint_confs)} joint waypoints')
 
             # Validate joint_vels parameter
             if joint_vels is None:
@@ -341,24 +343,24 @@ class BambooFrankaClient:
                 trajectory_request.waypoints.append(timed_waypoint)
 
             # Send trajectory to gRPC service and wait for completion
-            logging.info("Sending trajectory to control node...")
+            _log.debug("Sending trajectory to control node...")
             response = self.stub.ExecuteJointImpedanceTrajectory(
                 trajectory_request,
                 timeout=60.0  # Long timeout for trajectory execution
             )
 
             if response.success:
-                logging.info("Trajectory completed successfully")
+                _log.debug("Trajectory completed successfully")
                 return {"success": True}
             else:
-                logging.error("Trajectory failed")
+                _log.error("Trajectory failed")
                 return {"success": False, "error": "Trajectory execution failed"}
 
         except grpc.RpcError as e:
-            logging.error(f"gRPC error in execute_joint_impedance_path: {e.code()} - {e.details()}")
+            _log.error(f"gRPC error in execute_joint_impedance_path: {e.code()} - {e.details()}")
             return {"success": False, "error": f"gRPC error: {e.details()}"}
         except Exception as e:
-            logging.error(f"Error in execute_joint_impedance_path: {e}")
+            _log.error(f"Error in execute_joint_impedance_path: {e}")
             return {"success": False, "error": str(e)}
 
     def open_gripper(self, speed: float = 0.05, force: float = 0.1) -> dict:
@@ -380,7 +382,7 @@ class BambooFrankaClient:
             response = self._send_gripper_command(command)
             return response
         except Exception as e:
-            logging.error(f"Error in open_gripper: {e}")
+            _log.error(f"Error in open_gripper: {e}")
             return {"success": False, "error": str(e)}
 
     def close_gripper(self, speed: float = 0.05, force: float = 0.8) -> dict:
@@ -402,7 +404,7 @@ class BambooFrankaClient:
             response = self._send_gripper_command(command)
             return response
         except Exception as e:
-            logging.error(f"Error in close_gripper: {e}")
+            _log.error(f"Error in close_gripper: {e}")
             return {"success": False, "error": str(e)}
 
     def get_gripper_state(self) -> dict:
@@ -416,7 +418,7 @@ class BambooFrankaClient:
             response = self._send_gripper_command(command)
             return response
         except Exception as e:
-            logging.error(f"Error in get_gripper_state: {e}")
+            _log.error(f"Error in get_gripper_state: {e}")
             return {"success": False, "error": str(e)}
 
 
