@@ -107,7 +107,7 @@ private:
   // Control parameters
   const int traj_rate_ = 500; // Hz
   const double max_time = 1.0;
-  const bool log_err_ = false; // Set to true to enable error logging (may add latency)
+  const bool log_err_ = true; // Set to true to enable error logging (may add latency)
 
   Eigen::Matrix<double, 7, 1> current_q_;
   Eigen::Matrix<double, 7, 1> goal_q_;
