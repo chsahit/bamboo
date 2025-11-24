@@ -15,6 +15,8 @@ JointImpedanceController::JointImpedanceController(franka::Model *model)
   // This seems to be better
   Kp_ << 600.0, 600.0, 600.0, 300.0, 250.0, 100.0, 50.0;
   Kd_ << 20.0, 20.0, 20.0, 20.0, 7.5, 15.0, 5.0;
+  inertia_comp_ = false;
+    
 
   joint_max_ << 2.8978, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973;
   joint_min_ << -2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973;
@@ -37,7 +39,7 @@ JointImpedanceController::Step(const franka::RobotState &robot_state,
                                const Eigen::Matrix<double, 7, 1> &desired_dq) {
 
   std::array<double, 49> mass_array = model_->mass(robot_state);
-  Eigen::Map<Eigen::Matrix<double, 7, 7>> M(mass_array.data());
+  Eigen::Map<const Eigen::Matrix<double, 7, 7>> M(mass_array.data());
 
   std::array<double, 7> coriolis_array = model_->coriolis(robot_state);
   std::array<double, 7> gravity_array = model_->gravity(robot_state);
@@ -64,11 +66,33 @@ JointImpedanceController::Step(const franka::RobotState &robot_state,
   Eigen::Matrix<double, 7, 1> joint_pos_error = desired_q - current_q;
   Eigen::Matrix<double, 7, 1> joint_vel_error = desired_dq - current_dq;
 
-  // tau = Kp * (q_desired - q) + Kd * (dq_desired - dq) + coriolis
-  // NOTE: Franka already does automatic gravity compensation, so we don't add it here
-  Eigen::Matrix<double, 7, 1> tau_d = Kp_.cwiseProduct(joint_pos_error) +
-                                      Kd_.cwiseProduct(joint_vel_error) +
-                                      coriolis;
+  Eigen::Matrix<double, 7, 1> tau_d;
+
+  if (inertia_comp_) {
+    // Inertial compensation: tau = M(q) * (Kd * dq_err + Kp * q_err) + coriolis
+    // NOTE: Franka already does automatic gravity compensation, so we don't add it here
+    Eigen::Matrix<double, 7, 1> ddq_star = Kd_.cwiseProduct(joint_vel_error) +
+                                            Kp_.cwiseProduct(joint_pos_error);
+    tau_d = M * ddq_star + coriolis;
+  } else {
+    // Original stiffness control law: tau = Kp * (q_desired - q) + Kd * (dq_desired - dq) + coriolis
+    // NOTE: Franka already does automatic gravity compensation, so we don't add it here
+    tau_d = Kp_.cwiseProduct(joint_pos_error) +
+            Kd_.cwiseProduct(joint_vel_error) +
+            coriolis;
+  }
+
+  // Debug output
+  /*
+  static int debug_counter = 0;
+  if (debug_counter % 100 == 0) {  // Print every 100 cycles
+    std::cout << "[DEBUG] M diagonal: " << M.diagonal().transpose() << std::endl;
+    std::cout << "[DEBUG] ddq_star: " << ddq_star.transpose() << std::endl;
+    std::cout << "[DEBUG] M*ddq_star: " << (M * ddq_star).transpose() << std::endl;
+    std::cout << "[DEBUG] coriolis: " << coriolis.transpose() << std::endl;
+  }
+  debug_counter++;
+  */
 
   // Apply torque limits
   for (int i = 0; i < 7; i++) {

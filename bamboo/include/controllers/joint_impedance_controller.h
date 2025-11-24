@@ -45,6 +45,8 @@ private:
   Eigen::Matrix<double, 7, 1> smoothed_dq_;
   double alpha_q_;
   double alpha_dq_;
+
+  bool inertia_comp_;
 };
 
 } // namespace controllers
