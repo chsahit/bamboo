@@ -39,7 +39,7 @@ JointImpedanceController::Step(const franka::RobotState &robot_state,
                                const Eigen::Matrix<double, 7, 1> &desired_dq) {
 
   std::array<double, 49> mass_array = model_->mass(robot_state);
-  Eigen::Map<const Eigen::Matrix<double, 7, 7>> M(mass_array.data());
+  Eigen::Map<const Eigen::Matrix<double, 7, 7, Eigen::ColMajor>> M(mass_array.data());
 
   std::array<double, 7> coriolis_array = model_->coriolis(robot_state);
   std::array<double, 7> gravity_array = model_->gravity(robot_state);
@@ -68,31 +68,39 @@ JointImpedanceController::Step(const franka::RobotState &robot_state,
 
   Eigen::Matrix<double, 7, 1> tau_d;
 
+  // NOTE: Franka already does automatic gravity compensation, so we don't add it here
   if (inertia_comp_) {
     // Inertial compensation: tau = M(q) * (Kd * dq_err + Kp * q_err) + coriolis
-    // NOTE: Franka already does automatic gravity compensation, so we don't add it here
     Eigen::Matrix<double, 7, 1> ddq_star = Kd_.cwiseProduct(joint_vel_error) +
                                             Kp_.cwiseProduct(joint_pos_error);
     tau_d = M * ddq_star + coriolis;
   } else {
     // Original stiffness control law: tau = Kp * (q_desired - q) + Kd * (dq_desired - dq) + coriolis
-    // NOTE: Franka already does automatic gravity compensation, so we don't add it here
     tau_d = Kp_.cwiseProduct(joint_pos_error) +
             Kd_.cwiseProduct(joint_vel_error) +
             coriolis;
   }
 
   // Debug output
-  /*
   static int debug_counter = 0;
   if (debug_counter % 100 == 0) {  // Print every 100 cycles
+    std::cout << "[DEBUG] Mass array first 10 elements: ";
+    for (int i = 0; i < 10; i++) {
+      std::cout << mass_array[i] << " ";
+    }
+    std::cout << std::endl;
+    std::cout << "[DEBUG] M(0,0): " << M(0,0) << " M(1,1): " << M(1,1) << " M(6,6): " << M(6,6) << std::endl;
     std::cout << "[DEBUG] M diagonal: " << M.diagonal().transpose() << std::endl;
-    std::cout << "[DEBUG] ddq_star: " << ddq_star.transpose() << std::endl;
-    std::cout << "[DEBUG] M*ddq_star: " << (M * ddq_star).transpose() << std::endl;
+    std::cout << "[DEBUG] Full M matrix:" << std::endl << M << std::endl;
+    if (inertia_comp_) {
+      Eigen::Matrix<double, 7, 1> ddq_star = Kd_.cwiseProduct(joint_vel_error) +
+                                              Kp_.cwiseProduct(joint_pos_error);
+      std::cout << "[DEBUG] ddq_star: " << ddq_star.transpose() << std::endl;
+      std::cout << "[DEBUG] M*ddq_star: " << (M * ddq_star).transpose() << std::endl;
+    }
     std::cout << "[DEBUG] coriolis: " << coriolis.transpose() << std::endl;
   }
   debug_counter++;
-  */
 
   // Apply torque limits
   for (int i = 0; i < 7; i++) {
