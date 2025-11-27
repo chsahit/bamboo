@@ -42,8 +42,8 @@ JointImpedanceController::Step(const franka::RobotState &robot_state,
   const std::array<double, 7> coriolis_array = model_->coriolis(robot_state);
   Eigen::Matrix<double, 7, 1> coriolis = Eigen::VectorXd::Map(coriolis_array.data(), 7);
 
-  const std::array<double, 7> gravity_array = model_->gravity(robot_state);
-  Eigen::Matrix<double, 7, 1> gravity = Eigen::VectorXd::Map(gravity_array.data(), 7);
+  // const std::array<double, 7> gravity_array = model_->gravity(robot_state);
+  // Eigen::Matrix<double, 7, 1> gravity = Eigen::VectorXd::Map(gravity_array.data(), 7);
 
   // Get current state and copy to Eigen objects
   Eigen::Matrix<double, 7, 1> q = Eigen::VectorXd::Map(robot_state.q.data(), 7);
@@ -75,6 +75,7 @@ JointImpedanceController::Step(const franka::RobotState &robot_state,
                                        M * desired_ddq +
                                        coriolis;
 
+  /*
   // Debug output
   static int debug_counter = 0;
   if (debug_counter % 100 == 0) {  // Print every 100 cycles
@@ -91,7 +92,7 @@ JointImpedanceController::Step(const franka::RobotState &robot_state,
     std::cout << "[DEBUG] coriolis: " << coriolis.transpose() << std::endl;
   }
   debug_counter++;
-
+  */
   // Apply torque limits
   for (int i = 0; i < 7; i++) {
     if (tau_d[i] > joint_tau_limits_[i]) {
