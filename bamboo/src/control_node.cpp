@@ -112,6 +112,13 @@ private:
   Eigen::Matrix<double, 7, 1> current_q_;
   Eigen::Matrix<double, 7, 1> goal_q_;
 
+  // For acceleration computation via finite differencing
+  Eigen::Matrix<double, 7, 1> v_cmd_prev_;
+  Eigen::Matrix<double, 7, 1> a_cmd_latest_;
+
+  // Low-pass filter frequency for acceleration (matching reference driver)
+  const double diff_low_pass_freq_ = 30.0; // Hz
+
 public:
   BambooControlServiceImpl(
       franka::Robot *robot, franka::Model *model,
@@ -124,6 +131,10 @@ public:
     franka::RobotState init_state = robot_->readOnce();
     current_q_ = Eigen::VectorXd::Map(init_state.q.data(), 7);
     goal_q_ = current_q_;
+
+    // Initialize velocity and acceleration tracking
+    v_cmd_prev_.setZero();
+    a_cmd_latest_.setZero();
 
     std::cout << "Initial joint positions: " << current_q_.transpose()
               << std::endl;
@@ -281,6 +292,10 @@ private:
     control_running_ = true;
     double control_time = 0.0;
 
+    // Reset velocity and acceleration tracking for new trajectory
+    v_cmd_prev_.setZero();
+    a_cmd_latest_.setZero();
+
     // Current waypoint tracking
     std::size_t current_waypoint = 0;
     double waypoint_start_time = 0.0;
@@ -308,8 +323,11 @@ private:
     auto control_callback = [&](const franka::RobotState &robot_state,
                                 franka::Duration period) -> franka::Torques {
       try {
+        // Get time step
+        const double dt = period.toSec();
+
         // Update time
-        control_time += period.toSec();
+        control_time += dt;
 
         // Update current position
         current_q_ = Eigen::VectorXd::Map(robot_state.q.data(), 7);
@@ -393,9 +411,27 @@ private:
           desired_dq = velocities[current_waypoint];
         }
 
+        // Compute desired acceleration via finite differencing (matching reference driver)
+        Eigen::Matrix<double, 7, 1> desired_ddq =
+            Eigen::Matrix<double, 7, 1>::Zero();
+        if (dt > 0.0) {
+          // Compute raw acceleration from velocity difference
+          Eigen::Matrix<double, 7, 1> a_cmd_raw = (desired_dq - v_cmd_prev_) / dt;
+
+          // Apply low-pass filter (matching reference driver line 585-587)
+          for (int i = 0; i < 7; ++i) {
+            a_cmd_latest_[i] = franka::lowpassFilter(
+                dt, a_cmd_raw[i], a_cmd_latest_[i], diff_low_pass_freq_);
+          }
+          desired_ddq = a_cmd_latest_;
+
+          // Update previous velocity for next iteration
+          v_cmd_prev_ = desired_dq;
+        }
+
         // Compute control torques
         std::array<double, 7> tau_d =
-            controller_->Step(robot_state, desired_q, desired_dq);
+            controller_->Step(robot_state, desired_q, desired_dq, desired_ddq);
 
         // Apply rate limiting
         std::array<double, 7> tau_d_rate_limited = franka::limitRate(

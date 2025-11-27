@@ -19,6 +19,8 @@ public:
   std::array<double, 7> Step(const franka::RobotState &robot_state,
                              const Eigen::Matrix<double, 7, 1> &desired_q,
                              const Eigen::Matrix<double, 7, 1> &desired_dq =
+                                 Eigen::Matrix<double, 7, 1>::Zero(),
+                             const Eigen::Matrix<double, 7, 1> &desired_ddq =
                                  Eigen::Matrix<double, 7, 1>::Zero());
 
   // Set controller gains (optional - uses defaults if not called)
@@ -45,8 +47,6 @@ private:
   Eigen::Matrix<double, 7, 1> smoothed_dq_;
   double alpha_q_;
   double alpha_dq_;
-
-  bool inertia_comp_;
 };
 
 } // namespace controllers
