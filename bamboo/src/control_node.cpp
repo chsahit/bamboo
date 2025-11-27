@@ -313,7 +313,9 @@ private:
 
     // Initialize first waypoint
     goal_q_ = goals[0];
-    interpolator_->Reset(control_time, current_q_, goal_q_, traj_rate_,
+    Eigen::Matrix<double, 7, 1> start_velocity = Eigen::Matrix<double, 7, 1>::Zero();
+    Eigen::Matrix<double, 7, 1> goal_velocity = velocities.empty() ? Eigen::Matrix<double, 7, 1>::Zero() : velocities[0];
+    interpolator_->Reset(control_time, current_q_, goal_q_, start_velocity, goal_velocity, traj_rate_,
                          durations[0]);
 
     std::cout << "[CONTROL] Starting trajectory with " << goals.size()
@@ -391,7 +393,11 @@ private:
             // Setup next waypoint
             waypoint_start_time = control_time;
             goal_q_ = goals[current_waypoint];
-            interpolator_->Reset(control_time, current_q_, goal_q_, traj_rate_,
+            Eigen::Matrix<double, 7, 1> prev_velocity = (current_waypoint > 0 && current_waypoint-1 < velocities.size())
+                                                         ? velocities[current_waypoint-1] : Eigen::Matrix<double, 7, 1>::Zero();
+            Eigen::Matrix<double, 7, 1> curr_velocity = (current_waypoint < velocities.size())
+                                                         ? velocities[current_waypoint] : Eigen::Matrix<double, 7, 1>::Zero();
+            interpolator_->Reset(control_time, current_q_, goal_q_, prev_velocity, curr_velocity, traj_rate_,
                                  durations[current_waypoint]);
 
             // std::cout << "[CONTROL] Moving to waypoint " << current_waypoint
@@ -400,16 +406,10 @@ private:
           }
         }
 
-        // Get interpolated desired position for current waypoint
+        // Get interpolated desired position and velocity for current waypoint
         Eigen::Matrix<double, 7, 1> desired_q;
-        interpolator_->GetNextStep(control_time, desired_q);
-
-        // Get desired velocity for current waypoint (with bounds checking)
-        Eigen::Matrix<double, 7, 1> desired_dq =
-            Eigen::Matrix<double, 7, 1>::Zero();
-        if (current_waypoint < velocities.size()) {
-          desired_dq = velocities[current_waypoint];
-        }
+        Eigen::Matrix<double, 7, 1> desired_dq;
+        interpolator_->GetNextStep(control_time, desired_q, desired_dq);
 
         // Compute desired acceleration via finite differencing (matching reference driver)
         Eigen::Matrix<double, 7, 1> desired_ddq =
