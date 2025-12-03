@@ -50,8 +50,8 @@ public:
                     const Eigen::Matrix<double, 7, 1> &q_start,
                     const Eigen::Matrix<double, 7, 1> &q_goal,
                     const Eigen::Matrix<double, 7, 1> &v_start,
-                    const Eigen::Matrix<double, 7, 1> &v_goal,
-                    const int &rate, const double &max_time) {
+                    const Eigen::Matrix<double, 7, 1> &v_goal, const int &rate,
+                    const double &max_time) {
     dt_ = 1. / static_cast<double>(rate);
     last_time_ = time_sec;
     start_time_ = time_sec;
@@ -80,7 +80,8 @@ public:
     GetNextStep(time_sec, q_t, v_t);
   };
 
-  inline void GetNextStep(const double &time_sec, Vector7d &q_t, Vector7d &v_t) {
+  inline void GetNextStep(const double &time_sec, Vector7d &q_t,
+                          Vector7d &v_t) {
     if (!start_) {
       start_time_ = time_sec;
       last_q_t_ = q_start_;

@@ -107,7 +107,8 @@ private:
   // Control parameters
   const int traj_rate_ = 500; // Hz
   const double max_time = 1.0;
-  const bool log_err_ = true; // Set to true to enable error logging (may add latency)
+  const bool log_err_ =
+      true; // Set to true to enable error logging (may add latency)
 
   Eigen::Matrix<double, 7, 1> current_q_;
   Eigen::Matrix<double, 7, 1> goal_q_;
@@ -313,10 +314,13 @@ private:
 
     // Initialize first waypoint
     goal_q_ = goals[0];
-    Eigen::Matrix<double, 7, 1> start_velocity = Eigen::Matrix<double, 7, 1>::Zero();
-    Eigen::Matrix<double, 7, 1> goal_velocity = velocities.empty() ? Eigen::Matrix<double, 7, 1>::Zero() : velocities[0];
-    interpolator_->Reset(control_time, current_q_, goal_q_, start_velocity, goal_velocity, traj_rate_,
-                         durations[0]);
+    Eigen::Matrix<double, 7, 1> start_velocity =
+        Eigen::Matrix<double, 7, 1>::Zero();
+    Eigen::Matrix<double, 7, 1> goal_velocity =
+        velocities.empty() ? Eigen::Matrix<double, 7, 1>::Zero()
+                           : velocities[0];
+    interpolator_->Reset(control_time, current_q_, goal_q_, start_velocity,
+                         goal_velocity, traj_rate_, durations[0]);
 
     std::cout << "[CONTROL] Starting trajectory with " << goals.size()
               << " waypoints" << std::endl;
@@ -346,8 +350,8 @@ private:
               max_joint_error_rad = waypoint_final_error_rad;
             }
 
-            // Calculate end-effector position and orientation errors for completed waypoint
-            // Get desired EE pose from goal joint angles
+            // Calculate end-effector position and orientation errors for
+            // completed waypoint Get desired EE pose from goal joint angles
             std::array<double, 7> goal_q_array;
             Eigen::VectorXd::Map(&goal_q_array[0], 7) = goal_q_;
 
@@ -355,24 +359,33 @@ private:
             franka::RobotState temp_state = robot_state;
             temp_state.q = goal_q_array;
 
-            std::array<double, 16> desired_ee_pose_array = model_->pose(franka::Frame::kEndEffector, temp_state);
-            Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::ColMajor>> desired_ee_pose(desired_ee_pose_array.data());
+            std::array<double, 16> desired_ee_pose_array =
+                model_->pose(franka::Frame::kEndEffector, temp_state);
+            Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::ColMajor>>
+                desired_ee_pose(desired_ee_pose_array.data());
 
             // Get current EE pose from robot state
-            Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::ColMajor>> current_ee_pose(robot_state.O_T_EE.data());
+            Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::ColMajor>>
+                current_ee_pose(robot_state.O_T_EE.data());
 
             // Calculate position error (translation part)
-            Eigen::Vector3d desired_position = desired_ee_pose.block<3, 1>(0, 3);
-            Eigen::Vector3d current_position = current_ee_pose.block<3, 1>(0, 3);
-            double current_ee_position_error = (desired_position - current_position).norm();
+            Eigen::Vector3d desired_position =
+                desired_ee_pose.block<3, 1>(0, 3);
+            Eigen::Vector3d current_position =
+                current_ee_pose.block<3, 1>(0, 3);
+            double current_ee_position_error =
+                (desired_position - current_position).norm();
             if (current_ee_position_error > max_ee_position_error_m) {
               max_ee_position_error_m = current_ee_position_error;
             }
 
             // Calculate orientation error (rotation part)
-            Eigen::Matrix3d desired_rotation = desired_ee_pose.block<3, 3>(0, 0);
-            Eigen::Matrix3d current_rotation = current_ee_pose.block<3, 3>(0, 0);
-            Eigen::Matrix3d rotation_error = desired_rotation * current_rotation.transpose();
+            Eigen::Matrix3d desired_rotation =
+                desired_ee_pose.block<3, 3>(0, 0);
+            Eigen::Matrix3d current_rotation =
+                current_ee_pose.block<3, 3>(0, 0);
+            Eigen::Matrix3d rotation_error =
+                desired_rotation * current_rotation.transpose();
 
             // Convert rotation matrix to angle-axis to get scalar error
             Eigen::AngleAxisd angle_axis(rotation_error);
@@ -393,11 +406,17 @@ private:
             // Setup next waypoint
             waypoint_start_time = control_time;
             goal_q_ = goals[current_waypoint];
-            Eigen::Matrix<double, 7, 1> prev_velocity = (current_waypoint > 0 && current_waypoint-1 < velocities.size())
-                                                         ? velocities[current_waypoint-1] : Eigen::Matrix<double, 7, 1>::Zero();
-            Eigen::Matrix<double, 7, 1> curr_velocity = (current_waypoint < velocities.size())
-                                                         ? velocities[current_waypoint] : Eigen::Matrix<double, 7, 1>::Zero();
-            interpolator_->Reset(control_time, current_q_, goal_q_, prev_velocity, curr_velocity, traj_rate_,
+            Eigen::Matrix<double, 7, 1> prev_velocity =
+                (current_waypoint > 0 &&
+                 current_waypoint - 1 < velocities.size())
+                    ? velocities[current_waypoint - 1]
+                    : Eigen::Matrix<double, 7, 1>::Zero();
+            Eigen::Matrix<double, 7, 1> curr_velocity =
+                (current_waypoint < velocities.size())
+                    ? velocities[current_waypoint]
+                    : Eigen::Matrix<double, 7, 1>::Zero();
+            interpolator_->Reset(control_time, current_q_, goal_q_,
+                                 prev_velocity, curr_velocity, traj_rate_,
                                  durations[current_waypoint]);
 
             // std::cout << "[CONTROL] Moving to waypoint " << current_waypoint
@@ -411,12 +430,14 @@ private:
         Eigen::Matrix<double, 7, 1> desired_dq;
         interpolator_->GetNextStep(control_time, desired_q, desired_dq);
 
-        // Compute desired acceleration via finite differencing (matching reference driver)
+        // Compute desired acceleration via finite differencing (matching
+        // reference driver)
         Eigen::Matrix<double, 7, 1> desired_ddq =
             Eigen::Matrix<double, 7, 1>::Zero();
         if (dt > 0.0) {
           // Compute raw acceleration from velocity difference
-          Eigen::Matrix<double, 7, 1> a_cmd_raw = (desired_dq - v_cmd_prev_) / dt;
+          Eigen::Matrix<double, 7, 1> a_cmd_raw =
+              (desired_dq - v_cmd_prev_) / dt;
 
           // Apply low-pass filter (matching reference driver line 585-587)
           for (int i = 0; i < 7; ++i) {
@@ -446,7 +467,8 @@ private:
 
           if (velocity_norm <
               0.01) { // Robot has stopped (threshold: 0.01 rad/s)
-            // Calculate final waypoint errors (robot vs last goal) - robot is now still
+            // Calculate final waypoint errors (robot vs last goal) - robot is
+            // now still
             Eigen::Matrix<double, 7, 1> final_goal = goals.back();
             std::array<double, 7> final_goal_array;
             Eigen::VectorXd::Map(&final_goal_array[0], 7) = final_goal;
@@ -454,21 +476,30 @@ private:
             // Get desired EE pose for final waypoint
             franka::RobotState final_temp_state = robot_state;
             final_temp_state.q = final_goal_array;
-            std::array<double, 16> final_desired_ee_pose_array = model_->pose(franka::Frame::kEndEffector, final_temp_state);
-            Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::ColMajor>> final_desired_ee_pose(final_desired_ee_pose_array.data());
+            std::array<double, 16> final_desired_ee_pose_array =
+                model_->pose(franka::Frame::kEndEffector, final_temp_state);
+            Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::ColMajor>>
+                final_desired_ee_pose(final_desired_ee_pose_array.data());
 
             // Get current EE pose from robot state
-            Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::ColMajor>> current_ee_pose(robot_state.O_T_EE.data());
+            Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::ColMajor>>
+                current_ee_pose(robot_state.O_T_EE.data());
 
             // Calculate final position error
-            Eigen::Vector3d final_desired_position = final_desired_ee_pose.block<3, 1>(0, 3);
-            Eigen::Vector3d current_position = current_ee_pose.block<3, 1>(0, 3);
-            final_ee_position_error_m = (final_desired_position - current_position).norm();
+            Eigen::Vector3d final_desired_position =
+                final_desired_ee_pose.block<3, 1>(0, 3);
+            Eigen::Vector3d current_position =
+                current_ee_pose.block<3, 1>(0, 3);
+            final_ee_position_error_m =
+                (final_desired_position - current_position).norm();
 
             // Calculate final orientation error
-            Eigen::Matrix3d final_desired_rotation = final_desired_ee_pose.block<3, 3>(0, 0);
-            Eigen::Matrix3d current_rotation = current_ee_pose.block<3, 3>(0, 0);
-            Eigen::Matrix3d final_rotation_error = final_desired_rotation * current_rotation.transpose();
+            Eigen::Matrix3d final_desired_rotation =
+                final_desired_ee_pose.block<3, 3>(0, 0);
+            Eigen::Matrix3d current_rotation =
+                current_ee_pose.block<3, 3>(0, 0);
+            Eigen::Matrix3d final_rotation_error =
+                final_desired_rotation * current_rotation.transpose();
             Eigen::AngleAxisd final_angle_axis(final_rotation_error);
             final_ee_orientation_error_rad = std::abs(final_angle_axis.angle());
 
@@ -500,28 +531,30 @@ private:
       if (log_err_) {
         // Print max joint error across all waypoint final errors
         double max_joint_error_deg = max_joint_error_rad * 180.0 / M_PI;
-        std::cout << "[CONTROL] Max sum of joint errors during trajectory: " << std::fixed
-                  << std::setprecision(2) << max_joint_error_deg << " degrees"
-                  << std::endl;
+        std::cout << "[CONTROL] Max sum of joint errors during trajectory: "
+                  << std::fixed << std::setprecision(2) << max_joint_error_deg
+                  << " degrees" << std::endl;
 
         // Print end-effector error metrics
-        double max_ee_orientation_error_deg = max_ee_orientation_error_rad * 180.0 / M_PI;
+        double max_ee_orientation_error_deg =
+            max_ee_orientation_error_rad * 180.0 / M_PI;
         std::cout << "[CONTROL] Max EE position error during trajectory: "
-                  << std::fixed << std::setprecision(4) << max_ee_position_error_m * 1000.0
-                  << " mm" << std::endl;
+                  << std::fixed << std::setprecision(4)
+                  << max_ee_position_error_m * 1000.0 << " mm" << std::endl;
         std::cout << "[CONTROL] Max EE orientation error during trajectory: "
-                  << std::fixed << std::setprecision(2) << max_ee_orientation_error_deg
-                  << " degrees" << std::endl;
+                  << std::fixed << std::setprecision(2)
+                  << max_ee_orientation_error_deg << " degrees" << std::endl;
       }
 
       // Print final waypoint errors
-      double final_ee_orientation_error_deg = final_ee_orientation_error_rad * 180.0 / M_PI;
+      double final_ee_orientation_error_deg =
+          final_ee_orientation_error_rad * 180.0 / M_PI;
       std::cout << "[CONTROL] Final EE position error (vs last waypoint): "
-                << std::fixed << std::setprecision(4) << final_ee_position_error_m * 1000.0
-                << " mm" << std::endl;
+                << std::fixed << std::setprecision(4)
+                << final_ee_position_error_m * 1000.0 << " mm" << std::endl;
       std::cout << "[CONTROL] Final EE orientation error (vs last waypoint): "
-                << std::fixed << std::setprecision(2) << final_ee_orientation_error_deg
-                << " degrees" << std::endl;
+                << std::fixed << std::setprecision(2)
+                << final_ee_orientation_error_deg << " degrees" << std::endl;
 
       return true;
     } catch (const franka::ControlException &e) {
