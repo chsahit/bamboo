@@ -3,8 +3,6 @@
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-sudo apt install build-essential cmake git libpoco-dev libeigen3-dev libzmq3-dev g++ apt-transport-https curl gnupg -y
-
 # Clone libfranka to third_party
 cd "$SCRIPT_DIR"
 mkdir -p third_party
@@ -71,8 +69,6 @@ if ! grep -q "$INSTALL_LIB_PATH" "$HOME/.bashrc"; then
 else
     echo "LD_LIBRARY_PATH already configured in ~/.bashrc"
 fi
-
-sudo usermod -a -G realtime $USER
 
 # download c++ zmq wrapper
 cd "$SCRIPT_DIR"
