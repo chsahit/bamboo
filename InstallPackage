@@ -3,6 +3,28 @@
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+# Helper function to run build commands quietly
+# Shows only errors unless the command fails
+run_quiet() {
+    local step_name="$1"
+    shift
+    local log_file=$(mktemp)
+
+    echo "[$step_name]..."
+    if "$@" > "$log_file" 2>&1; then
+        echo "[$step_name] ✓"
+        rm "$log_file"
+        return 0
+    else
+        echo "[$step_name] ✗ FAILED - Output:"
+        echo "----------------------------------------"
+        cat "$log_file"
+        echo "----------------------------------------"
+        rm "$log_file"
+        return 1
+    fi
+}
+
 # Clone libfranka to third_party
 cd "$SCRIPT_DIR"
 mkdir -p third_party
@@ -50,9 +72,9 @@ mkdir -p build
 cd build
 
 # Install to bamboo/install (one level up from libfranka)
-cmake .. -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/opt/openrobots/lib/cmake
-make -j$(nproc)
-make install
+run_quiet "libfranka: cmake configure" cmake .. -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/opt/openrobots/lib/cmake
+run_quiet "libfranka: build" make -j$(nproc)
+run_quiet "libfranka: install" make install
 
 # Get absolute path of the install directory
 INSTALL_LIB_PATH="$SCRIPT_DIR/install/lib"
@@ -75,8 +97,8 @@ cd "$SCRIPT_DIR"
 cd third_party
 git clone https://github.com/zeromq/zmqpp.git
 cd zmqpp
-make PREFIX="$SCRIPT_DIR/install"
-make install PREFIX="$SCRIPT_DIR/install" 
+run_quiet "zmqpp: build" make PREFIX="$SCRIPT_DIR/install"
+run_quiet "zmqpp: install" make install PREFIX="$SCRIPT_DIR/install" 
 cd ..
 
 # download protobuf
@@ -89,9 +111,9 @@ git submodule update --init --recursive
 # Use cmake instead of bazel to avoid compiler issues
 mkdir -p build
 cd build
-cmake .. -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -Dprotobuf_BUILD_TESTS=OFF
-make -j$(nproc)
-make install
+run_quiet "protobuf: cmake configure" cmake .. -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -Dprotobuf_BUILD_TESTS=OFF
+run_quiet "protobuf: build" make -j$(nproc)
+run_quiet "protobuf: install" make install
 
 # Clone and build gRPC
 cd "$SCRIPT_DIR/third_party"
@@ -99,7 +121,7 @@ git clone --recurse-submodules -b v1.66.0 --depth 1 --shallow-submodules https:/
 cd grpc
 mkdir build
 cd build
-cmake -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" ..
-make -j$(nproc)
-make install
+run_quiet "grpc: cmake configure" cmake -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" ..
+run_quiet "grpc: build" make -j$(nproc)
+run_quiet "grpc: install" make install
 
