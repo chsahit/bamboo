@@ -87,13 +87,8 @@ To contribute, please create a fork of the repository, make a feature branch bas
 This work draws heavily from [deoxys\_control](https://github.com/UT-Austin-RPL/deoxys_control) and [drake-franka-driver](https://github.com/RobotLocomotion/drake-franka-driver). Thanks to developers for their open-source code!
 
 ## TODO
-- [ ] Check that all the examples run after migrating
-- [ ] move gripper to GRPC
-- [ ] put gripper and robot in the same script
-- [ ] delete unused proto defs
-- [ ] make sure examples work
-- [ ] git protections + release tag
-- [ ] clean up comments
+- [x] make sure examples work
+- [x] clean up comments
 - [x] add compilation instructions for debugging / general compilation instructions (Quickstart)
 - [x] Acks
 - [x] document warnings that come up normally when building
