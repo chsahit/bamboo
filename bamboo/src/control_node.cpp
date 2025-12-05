@@ -117,7 +117,7 @@ private:
   Eigen::Matrix<double, 7, 1> v_cmd_prev_;
   Eigen::Matrix<double, 7, 1> a_cmd_latest_;
 
-  // Low-pass filter frequency for acceleration (matching reference driver)
+  // Low-pass filter frequency for acceleration
   const double diff_low_pass_freq_ = 30.0; // Hz
 
 public:
@@ -430,8 +430,7 @@ private:
         Eigen::Matrix<double, 7, 1> desired_dq;
         interpolator_->GetNextStep(control_time, desired_q, desired_dq);
 
-        // Compute desired acceleration via finite differencing (matching
-        // reference driver)
+        // Compute desired acceleration via finite differencing
         Eigen::Matrix<double, 7, 1> desired_ddq =
             Eigen::Matrix<double, 7, 1>::Zero();
         if (dt > 0.0) {
@@ -439,7 +438,7 @@ private:
           Eigen::Matrix<double, 7, 1> a_cmd_raw =
               (desired_dq - v_cmd_prev_) / dt;
 
-          // Apply low-pass filter (matching reference driver line 585-587)
+          // Apply low-pass filter
           for (int i = 0; i < 7; ++i) {
             a_cmd_latest_[i] = franka::lowpassFilter(
                 dt, a_cmd_raw[i], a_cmd_latest_[i], diff_low_pass_freq_);

@@ -3,58 +3,48 @@
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-sudo apt install build-essential cmake git libpoco-dev libeigen3-dev libzmq3-dev g++ apt-transport-https curl gnupg -y
+# Helper function to run build commands quietly
+# Shows only errors unless the command fails
+run_quiet() {
+    local step_name="$1"
+    shift
+    local log_file=$(mktemp)
+
+    echo "[$step_name]..."
+    if "$@" > "$log_file" 2>&1; then
+        echo "[$step_name] ✓"
+        rm "$log_file"
+        return 0
+    else
+        echo "[$step_name] ✗ FAILED - Output:"
+        echo "----------------------------------------"
+        cat "$log_file"
+        echo "----------------------------------------"
+        rm "$log_file"
+        return 1
+    fi
+}
 
 # Clone libfranka to third_party
 cd "$SCRIPT_DIR"
 mkdir -p third_party
 cd third_party
-git clone --recurse-submodules https://github.com/frankaemika/libfranka
+run_quiet "libfranka: git clone" git clone --recurse-submodules https://github.com/frankaemika/libfranka
 cd libfranka
 
-echo "Which libfranka version are you going to use? (currently supporting 0.14.0, but 0.13.0 should work as well)"
+echo "Which libfranka version are you going to use? (tested on 0.14.0, but 0.13.0 should work as well)"
 read version
 
-git checkout ${version}
-git submodule update
-
-# Install Pinocchio if not already installed
-if ! dpkg -l | grep -q "robotpkg-pinocchio"; then
-    echo "Pinocchio not found. Installing..."
-
-    # Setup keyring if not already present
-    if [ ! -f /etc/apt/keyrings/robotpkg.asc ]; then
-        echo "Setting up robotpkg keyring..."
-        sudo mkdir -p /etc/apt/keyrings
-        curl http://robotpkg.openrobots.org/packages/debian/robotpkg.asc \
-            | sudo tee /etc/apt/keyrings/robotpkg.asc > /dev/null
-    else
-        echo "Robotpkg keyring already exists."
-    fi
-
-    # Add repository if not already present
-    if [ ! -f /etc/apt/sources.list.d/robotpkg.list ]; then
-        echo "Adding robotpkg repository..."
-        echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/robotpkg.asc] http://robotpkg.openrobots.org/packages/debian/pub $(lsb_release -cs) robotpkg" \
-            | sudo tee /etc/apt/sources.list.d/robotpkg.list > /dev/null
-    else
-        echo "Robotpkg repository already configured."
-    fi
-
-    # Update and install Pinocchio
-    sudo apt-get update
-    sudo apt-get install -y robotpkg-pinocchio
-else
-    echo "Pinocchio is already installed."
-fi
+run_quiet "libfranka: git checkout ${version}" git checkout ${version}
+run_quiet "libfranka: git submodule update" git submodule update
 
 mkdir -p build
 cd build
 
 # Install to bamboo/install (one level up from libfranka)
-cmake .. -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/opt/openrobots/lib/cmake
-make -j$(nproc)
-make install
+run_quiet "libfranka: cmake configure" cmake .. -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/opt/openrobots/lib/cmake
+run_quiet "libfranka: build" make -j$(nproc)
+run_quiet "libfranka: install" make install
 
 # Get absolute path of the install directory
 INSTALL_LIB_PATH="$SCRIPT_DIR/install/lib"
@@ -67,43 +57,32 @@ if ! grep -q "$INSTALL_LIB_PATH" "$HOME/.bashrc"; then
     echo "# Added by libfranka InstallPackage script" >> "$HOME/.bashrc"
     echo "export LD_LIBRARY_PATH=\"$INSTALL_LIB_PATH:/opt/openrobots/lib:\$LD_LIBRARY_PATH\"" >> "$HOME/.bashrc"
     echo "Added LD_LIBRARY_PATH to ~/.bashrc"
-    echo "Run 'source ~/.bashrc' or restart your terminal for changes to take effect"
-else
-    echo "LD_LIBRARY_PATH already configured in ~/.bashrc"
 fi
 
-sudo usermod -a -G realtime $USER
-
-# download c++ zmq wrapper
-cd "$SCRIPT_DIR"
-cd third_party
-git clone https://github.com/zeromq/zmqpp.git
-cd zmqpp
-make PREFIX="$SCRIPT_DIR/install"
-make install PREFIX="$SCRIPT_DIR/install" 
-cd ..
+# Export for current session
+export LD_LIBRARY_PATH="$INSTALL_LIB_PATH:/opt/openrobots/lib:$LD_LIBRARY_PATH"
 
 # download protobuf
 cd "$SCRIPT_DIR/third_party"
-git clone --recursive https://github.com/protocolbuffers/protobuf.git
+run_quiet "protobuf: git clone" git clone --recursive https://github.com/protocolbuffers/protobuf.git
 cd protobuf
-git checkout v33.0
-git submodule update --init --recursive
+run_quiet "protobuf: git checkout v33.0" git checkout v33.0
+run_quiet "protobuf: git submodule update" git submodule update --init --recursive
 
 # Use cmake instead of bazel to avoid compiler issues
 mkdir -p build
 cd build
-cmake .. -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -Dprotobuf_BUILD_TESTS=OFF
-make -j$(nproc)
-make install
+run_quiet "protobuf: cmake configure" cmake .. -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -Dprotobuf_BUILD_TESTS=OFF
+run_quiet "protobuf: build" make -j$(nproc)
+run_quiet "protobuf: install" make install
 
 # Clone and build gRPC
 cd "$SCRIPT_DIR/third_party"
-git clone --recurse-submodules -b v1.66.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc
+run_quiet "grpc: git clone" git clone --recurse-submodules -b v1.66.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc
 cd grpc
 mkdir build
 cd build
-cmake -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" ..
-make -j$(nproc)
-make install
+run_quiet "grpc: cmake configure" cmake -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" ..
+run_quiet "grpc: build" make -j$(nproc)
+run_quiet "grpc: install" make install
 

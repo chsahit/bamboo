@@ -16,9 +16,9 @@ from bamboo_client import BambooFrankaClient
 def main() -> None:
     # Connect to bamboo control node and gripper server
     with BambooFrankaClient(
-        control_port=5556,      # Bamboo control node port
+        control_port=5555,      # Bamboo control node port
         server_ip="localhost",  # Robot IP (change as needed)
-        gripper_port=5558,      # Gripper server port
+        gripper_port=5559,      # Gripper server port
         enable_gripper=True
     ) as client:
 

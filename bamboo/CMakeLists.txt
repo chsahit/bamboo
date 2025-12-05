@@ -12,25 +12,27 @@ set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libfranka/buil
 set(CMAKE_INSTALL_RPATH "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libfranka/build")
 set(CMAKE_BUILD_RPATH "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libfranka/build")
 
+# Add our install directory to CMAKE_PREFIX_PATH so all packages can be found
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../install")
+
 # Find required packages
 find_package(Franka REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 # Force use of our local protobuf installation ONLY
-set(Protobuf_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../install")
-set(Protobuf_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../install/include")
-set(Protobuf_LIBRARY "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libprotobuf.a")
-set(Protobuf_PROTOC_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/../install/bin/protoc")
-find_package(Protobuf REQUIRED)
+set(protobuf_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/cmake/protobuf")
+find_package(protobuf CONFIG REQUIRED)
+
+# Set protoc executable location for use in custom commands
+get_target_property(PROTOBUF_PROTOC_EXECUTABLE protobuf::protoc IMPORTED_LOCATION_NOCONFIG)
+if(NOT PROTOBUF_PROTOC_EXECUTABLE)
+    get_target_property(PROTOBUF_PROTOC_EXECUTABLE protobuf::protoc IMPORTED_LOCATION)
+endif()
 
 # Find gRPC - use local installation
-list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../install")
 find_package(gRPC CONFIG REQUIRED)
 set(GRPC_CPP_PLUGIN_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/../install/bin/grpc_cpp_plugin")
 set(GRPC_LIBRARIES gRPC::grpc++ gRPC::grpc)
-# Find zmqpp manually since we built it locally
-find_library(ZMQPP_LIBRARY zmqpp PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib" REQUIRED)
-find_path(ZMQPP_INCLUDE_DIR zmqpp/zmqpp.hpp PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../install/include" REQUIRED)
 
 # Generate protobuf and gRPC files
 set(PROTO_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/proto")
@@ -95,7 +97,6 @@ include_directories(
     ${CMAKE_CURRENT_BINARY_DIR}/proto_generated
     "${CMAKE_CURRENT_SOURCE_DIR}/../install/include"  # Our protobuf headers FIRST
     ${EIGEN3_INCLUDE_DIRS}
-    ${ZMQPP_INCLUDE_DIR}
 )
 
 # Create library for controllers
@@ -107,7 +108,7 @@ add_library(bamboo_controllers
 target_link_libraries(bamboo_controllers
     Franka::Franka
     Eigen3::Eigen
-    ${PROTOBUF_LIBRARIES}
+    protobuf::libprotobuf
 )
 
 # Create control node executable
@@ -132,8 +133,8 @@ target_link_libraries(bamboo_control_node
     bamboo_controllers
     Franka::Franka
     Eigen3::Eigen
-    ${Protobuf_LIBRARY}  # Use our specific protobuf library
-    ${GRPC_LIBRARIES}    # Add gRPC libraries
+    protobuf::libprotobuf  # Use protobuf target
+    ${GRPC_LIBRARIES}      # Add gRPC libraries
     gRPC::grpc++_reflection  # Add reflection library
     # Add Pinocchio libraries that libfranka depends on
     /opt/openrobots/lib/libpinocchio_default.so
