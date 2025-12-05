@@ -38,36 +38,6 @@ read version
 run_quiet "libfranka: git checkout ${version}" git checkout ${version}
 run_quiet "libfranka: git submodule update" git submodule update
 
-# Install Pinocchio if not already installed
-if ! dpkg -l | grep -q "robotpkg-pinocchio"; then
-    echo "Pinocchio not found. Installing..."
-
-    # Setup keyring if not already present
-    if [ ! -f /etc/apt/keyrings/robotpkg.asc ]; then
-        echo "Setting up robotpkg keyring..."
-        sudo mkdir -p /etc/apt/keyrings
-        curl http://robotpkg.openrobots.org/packages/debian/robotpkg.asc \
-            | sudo tee /etc/apt/keyrings/robotpkg.asc > /dev/null
-    else
-        echo "Robotpkg keyring already exists."
-    fi
-
-    # Add repository if not already present
-    if [ ! -f /etc/apt/sources.list.d/robotpkg.list ]; then
-        echo "Adding robotpkg repository..."
-        echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/robotpkg.asc] http://robotpkg.openrobots.org/packages/debian/pub $(lsb_release -cs) robotpkg" \
-            | sudo tee /etc/apt/sources.list.d/robotpkg.list > /dev/null
-    else
-        echo "Robotpkg repository already configured."
-    fi
-
-    # Update and install Pinocchio
-    sudo apt-get update
-    sudo apt-get install -y robotpkg-pinocchio
-else
-    echo "Pinocchio is already installed."
-fi
-
 mkdir -p build
 cd build
 
