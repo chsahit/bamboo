@@ -17,6 +17,9 @@ You do not need to install `libfranka` yourself — the included `InstallPackage
 ```bash
 bash InstallPackage
 ```
+You will be prompted to enter the version of libfranka to install. This can be determined by checking the FCI version in the Franka Desk (under Settings > Dashboard > Control) and then consulting the [FCI Compatability Table](https://frankarobotics.github.io/docs/compatibility.html) for a compatible `libfranka` version. 
+
+NB: Cloning and building `grpc` can take a long time due to the large number of submodules, this is expected behavior.
 
 ### Install Python Package
 ```bash
@@ -32,59 +35,68 @@ cmake ..
 make
 ```
 
-
 ## Client Installation
-To run 
-
-#### For Development
 ```bash
-# Install in development mode with all dependencies
-pip install -e ".[all]"
-```
-
-#### For Usage Only
-```bash
+conda create -n bamboo python=3.10
+conda activate bamboo
 pip install bamboo-franka-controller
 ```
 
 ## Usage
 
-### C++ Control Node
-First, build and run the C++ control node:
+### Server-Side Robot Control
+First, run the C++ control node 
 
 ```bash
+conda activate bamboo
 cd bamboo/build
-./bamboo_control_node <robot-ip> <zmq-port>
+./bamboo_control_node <robot-ip> <grpc-port>
 ```
 
 Example:
 ```bash
-./bamboo_control_node 192.168.1.100 5555
+./bamboo_control_node 172.16.0.2 5555
 ```
 
-### Python Scripts
-
-#### Running directly
+Then in a new terminal, launch the gripper server
 ```bash
-cd bamboo/examples
-python test_joint_offset.py 5555
+conda activate bamboo
+cd bamboo
+python3 gripper_server.py --gripper-port <gripper-device> --zmq-port <zmq-port>
 ```
+
+Example:
+```bash
+python3 gripper_server.py --gripper-port /dev/ttyUSB0 --zmq-port 5559
+```
+You may have to add the user to the `dialout` and `tty` groups to read from the robotiq grippers if this hasn't been done already. It can be done with 
+```bash
+sudo usermod -a -G dialout $USER
+sudo usermod -a -G tty $USER
+```
+
+### Client-Side Interface with robot and gripper
+*TODO*
 
 ## Contributing 
 For the python code we enforce style with `ruff` and typechecking with `mypy`. For the C++ code, we enforce style with `clang-tidy`. You can run all linting and checking steps with `pre-commit run --all-files`, they also will run automatically when you make a commit. 
 
 To contribute, please create a fork of the repository, make a feature branch based on main, and commit your changes there. Then open a pull request from that branch.
 
+## Acknowledgements
+This work draws heavily from [deoxys\_control](https://github.com/UT-Austin-RPL/deoxys_control) and [drake-franka-driver](https://github.com/RobotLocomotion/drake-franka-driver). Thanks to developers for their open-source code!
+
 ## TODO
-- [ ] add compilation instructions for debugging / general compilation instructions (Quickstart)
-- [ ] document warnings that come up normally when building
 - [ ] Check that all the examples run after migrating
 - [ ] move gripper to GRPC
 - [ ] put gripper and robot in the same script
-- [ ] bamboo client is sending joint impedances that are not used?
 - [ ] delete unused proto defs
 - [ ] make sure examples work
 - [ ] git protections + release tag
+- [ ] clean up comments
+- [x] add compilation instructions for debugging / general compilation instructions (Quickstart)
+- [x] Acks
+- [x] document warnings that come up normally when building
 - [x] mention caveat with needing sudo for install
 - [x] contributing notes
 - [x] update README

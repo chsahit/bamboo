@@ -32,7 +32,7 @@ cd third_party
 run_quiet "libfranka: git clone" git clone --recurse-submodules https://github.com/frankaemika/libfranka
 cd libfranka
 
-echo "Which libfranka version are you going to use? (currently supporting 0.14.0, but 0.13.0 should work as well)"
+echo "Which libfranka version are you going to use? (tested on 0.14.0, but 0.13.0 should work as well)"
 read version
 
 run_quiet "libfranka: git checkout ${version}" git checkout ${version}
@@ -87,10 +87,10 @@ if ! grep -q "$INSTALL_LIB_PATH" "$HOME/.bashrc"; then
     echo "# Added by libfranka InstallPackage script" >> "$HOME/.bashrc"
     echo "export LD_LIBRARY_PATH=\"$INSTALL_LIB_PATH:/opt/openrobots/lib:\$LD_LIBRARY_PATH\"" >> "$HOME/.bashrc"
     echo "Added LD_LIBRARY_PATH to ~/.bashrc"
-    echo "Run 'source ~/.bashrc' or restart your terminal for changes to take effect"
-else
-    echo "LD_LIBRARY_PATH already configured in ~/.bashrc"
 fi
+
+# Export for current session
+export LD_LIBRARY_PATH="$INSTALL_LIB_PATH:/opt/openrobots/lib:$LD_LIBRARY_PATH"
 
 # download protobuf
 cd "$SCRIPT_DIR/third_party"
