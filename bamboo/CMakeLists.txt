@@ -33,9 +33,6 @@ endif()
 find_package(gRPC CONFIG REQUIRED)
 set(GRPC_CPP_PLUGIN_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/../install/bin/grpc_cpp_plugin")
 set(GRPC_LIBRARIES gRPC::grpc++ gRPC::grpc)
-# Find zmqpp manually since we built it locally
-find_library(ZMQPP_LIBRARY zmqpp PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib" REQUIRED)
-find_path(ZMQPP_INCLUDE_DIR zmqpp/zmqpp.hpp PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../install/include" REQUIRED)
 
 # Generate protobuf and gRPC files
 set(PROTO_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/proto")
@@ -100,7 +97,6 @@ include_directories(
     ${CMAKE_CURRENT_BINARY_DIR}/proto_generated
     "${CMAKE_CURRENT_SOURCE_DIR}/../install/include"  # Our protobuf headers FIRST
     ${EIGEN3_INCLUDE_DIRS}
-    ${ZMQPP_INCLUDE_DIR}
 )
 
 # Create library for controllers

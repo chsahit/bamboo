@@ -29,14 +29,14 @@ run_quiet() {
 cd "$SCRIPT_DIR"
 mkdir -p third_party
 cd third_party
-git clone --recurse-submodules https://github.com/frankaemika/libfranka
+run_quiet "libfranka: git clone" git clone --recurse-submodules https://github.com/frankaemika/libfranka
 cd libfranka
 
 echo "Which libfranka version are you going to use? (currently supporting 0.14.0, but 0.13.0 should work as well)"
 read version
 
-git checkout ${version}
-git submodule update
+run_quiet "libfranka: git checkout ${version}" git checkout ${version}
+run_quiet "libfranka: git submodule update" git submodule update
 
 # Install Pinocchio if not already installed
 if ! dpkg -l | grep -q "robotpkg-pinocchio"; then
@@ -92,21 +92,12 @@ else
     echo "LD_LIBRARY_PATH already configured in ~/.bashrc"
 fi
 
-# download c++ zmq wrapper
-cd "$SCRIPT_DIR"
-cd third_party
-git clone https://github.com/zeromq/zmqpp.git
-cd zmqpp
-run_quiet "zmqpp: build" make PREFIX="$SCRIPT_DIR/install"
-run_quiet "zmqpp: install" make install PREFIX="$SCRIPT_DIR/install" 
-cd ..
-
 # download protobuf
 cd "$SCRIPT_DIR/third_party"
-git clone --recursive https://github.com/protocolbuffers/protobuf.git
+run_quiet "protobuf: git clone" git clone --recursive https://github.com/protocolbuffers/protobuf.git
 cd protobuf
-git checkout v33.0
-git submodule update --init --recursive
+run_quiet "protobuf: git checkout v33.0" git checkout v33.0
+run_quiet "protobuf: git submodule update" git submodule update --init --recursive
 
 # Use cmake instead of bazel to avoid compiler issues
 mkdir -p build
@@ -117,7 +108,7 @@ run_quiet "protobuf: install" make install
 
 # Clone and build gRPC
 cd "$SCRIPT_DIR/third_party"
-git clone --recurse-submodules -b v1.66.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc
+run_quiet "grpc: git clone" git clone --recurse-submodules -b v1.66.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc
 cd grpc
 mkdir build
 cd build
