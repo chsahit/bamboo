@@ -1,4 +1,5 @@
 #!/bin/bash
+#set -e
 
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -66,7 +67,7 @@ export LD_LIBRARY_PATH="$INSTALL_LIB_PATH:/opt/openrobots/lib:$LD_LIBRARY_PATH"
 cd "$SCRIPT_DIR/third_party"
 run_quiet "protobuf: git clone" git clone --recursive https://github.com/protocolbuffers/protobuf.git
 cd protobuf
-run_quiet "protobuf: git checkout v33.0" git checkout v33.0
+run_quiet "protobuf: git checkout v27.0" git checkout v27.0
 run_quiet "protobuf: git submodule update" git submodule update --init --recursive
 
 # Use cmake instead of bazel to avoid compiler issues
@@ -78,7 +79,7 @@ run_quiet "protobuf: install" make install
 
 # Clone and build gRPC
 cd "$SCRIPT_DIR/third_party"
-run_quiet "grpc: git clone" git clone --recurse-submodules -b v1.66.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc
+run_quiet "grpc: git clone" git clone --recurse-submodules -b v1.64.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc
 cd grpc
 mkdir build
 cd build
