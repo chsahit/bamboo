@@ -29,7 +29,7 @@ def main() -> int:
 
     try:
         # Create the client (uses default ports)
-        with BambooFrankaClient() as client:
+        with BambooFrankaClient(enable_gripper=False) as client:
             print("✓ Client connected successfully")
 
             # Get current joint angles

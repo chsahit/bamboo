@@ -120,13 +120,10 @@ add_executable(bamboo_control_node
 file(GLOB ABSL_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libabsl_*.a")
 set(UTF8_RANGE_LIB "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libutf8_range_lib.a")
 set(UPB_LIB "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libupb.a")
-# Add specific debugging libraries for missing symbols
+# Add specific debugging libraries for missing symbols (only include ones that exist)
 set(DEBUGGING_LIBS
     "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libabsl_debugging_internal.a"
     "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libabsl_demangle_internal.a"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libabsl_demangle_rust.a"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libabsl_decode_rust_punycode.a"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib/libabsl_utf8_for_code_point.a"
 )
 
 target_link_libraries(bamboo_control_node
@@ -136,9 +133,6 @@ target_link_libraries(bamboo_control_node
     protobuf::libprotobuf  # Use protobuf target
     ${GRPC_LIBRARIES}      # Add gRPC libraries
     gRPC::grpc++_reflection  # Add reflection library
-    # Add Pinocchio libraries that libfranka depends on
-    /opt/openrobots/lib/libpinocchio_default.so
-    /opt/openrobots/lib/libpinocchio_parsers.so
     # Add all absl libraries for our protobuf - link twice to resolve circular deps
     ${DEBUGGING_LIBS}
     ${ABSL_LIBS}

@@ -26,6 +26,25 @@ run_quiet() {
     fi
 }
 
+# Find best cmake (requires 3.16+)
+# Priority: local installation in ~/local/src/cmake-*/bin/cmake, then system cmake
+CMAKE_CMD="cmake"
+if [ -d "$HOME/local/src" ]; then
+    # Find any local cmake installation
+    LOCAL_CMAKE=$(find "$HOME/local/src" -path "*/cmake-*/bin/cmake" -type f 2>/dev/null | head -1)
+    if [ -n "$LOCAL_CMAKE" ] && [ -x "$LOCAL_CMAKE" ]; then
+        CMAKE_CMD="$LOCAL_CMAKE"
+        echo "Using local cmake: $CMAKE_CMD ($($CMAKE_CMD --version | head -1))"
+    fi
+fi
+
+# If still using system cmake, check version
+if [ "$CMAKE_CMD" = "cmake" ]; then
+    CMAKE_VERSION=$(cmake --version 2>/dev/null | head -1 | grep -oP '\d+\.\d+\.\d+' || echo "0.0.0")
+    echo "Using system cmake: version $CMAKE_VERSION"
+    # Note: This script requires cmake 3.16+ for protobuf v27.0 and gRPC v1.64.0
+fi
+
 # Clone libfranka to third_party
 cd "$SCRIPT_DIR"
 mkdir -p third_party
@@ -43,7 +62,7 @@ mkdir -p build
 cd build
 
 # Install to bamboo/install (one level up from libfranka)
-run_quiet "libfranka: cmake configure" cmake .. -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/opt/openrobots/lib/cmake
+run_quiet "libfranka: cmake configure" $CMAKE_CMD .. -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/opt/openrobots/lib/cmake
 run_quiet "libfranka: build" make -j$(nproc)
 run_quiet "libfranka: install" make install
 
@@ -73,7 +92,7 @@ run_quiet "protobuf: git submodule update" git submodule update --init --recursi
 # Use cmake instead of bazel to avoid compiler issues
 mkdir -p build
 cd build
-run_quiet "protobuf: cmake configure" cmake .. -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -Dprotobuf_BUILD_TESTS=OFF
+run_quiet "protobuf: cmake configure" $CMAKE_CMD .. -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -Dprotobuf_BUILD_TESTS=OFF
 run_quiet "protobuf: build" make -j$(nproc)
 run_quiet "protobuf: install" make install
 
@@ -83,7 +102,8 @@ run_quiet "grpc: git clone" git clone --recurse-submodules -b v1.64.0 --depth 1 
 cd grpc
 mkdir build
 cd build
-run_quiet "grpc: cmake configure" cmake -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" ..
+# Use -O1 optimization to avoid gcc-9 internal compiler error in call.cc
+run_quiet "grpc: cmake configure" $CMAKE_CMD -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -DCMAKE_CXX_FLAGS="-O1" ..
 run_quiet "grpc: build" make -j$(nproc)
 run_quiet "grpc: install" make install
 
