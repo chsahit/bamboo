@@ -102,8 +102,9 @@ run_quiet "grpc: git clone" git clone --recurse-submodules -b v1.64.0 --depth 1 
 cd grpc
 mkdir build
 cd build
-# Use -O1 optimization to avoid gcc-9 internal compiler error in call.cc
-run_quiet "grpc: cmake configure" $CMAKE_CMD -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -DCMAKE_CXX_FLAGS="-O1" ..
+
+run_quiet "grpc: cmake configure" $CMAKE_CMD -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -DCMAKE_CXX_FLAGS="-O0 -g0" -DCMAKE_C_FLAGS="-O0 -g0" ..
+
 run_quiet "grpc: build" make -j$(nproc)
 run_quiet "grpc: install" make install
 
