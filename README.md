@@ -39,7 +39,7 @@ make
 ```bash
 conda create -n bamboo python=3.10
 conda activate bamboo
-pip install bamboo-franka-controller
+pip install -e .
 ```
 
 ## Usage
