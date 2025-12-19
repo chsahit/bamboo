@@ -28,13 +28,11 @@ def main() -> None:
         print("Closing gripper...")
         result = client.close_gripper(speed=0.05, force=0.1)
         print(f"Close result: {result}")
-        time.sleep(2)  # Wait for movement
 
         # Open gripper
         print("Opening gripper...")
         result = client.open_gripper(speed=0.05, force=0.1)
         print(f"Open result: {result}")
-        time.sleep(2)  # Wait for movement
 
         # Get gripper state
         print("Getting gripper state...")

@@ -363,7 +363,7 @@ class BambooFrankaClient:
             _log.error(f"Error in execute_joint_impedance_path: {e}")
             return {"success": False, "error": str(e)}
 
-    def open_gripper(self, speed: float = 0.05, force: float = 0.1) -> dict:
+    def open_gripper(self, speed: float = 0.05, force: float = 0.1, blocking: bool = True) -> dict:
         """Open the gripper.
 
         Args:
@@ -377,7 +377,8 @@ class BambooFrankaClient:
             command = {
                 "action": "open",
                 "speed": speed,
-                "force": force
+                "force": force,
+                "blocking": blocking
             }
             response = self._send_gripper_command(command)
             return response
@@ -385,7 +386,7 @@ class BambooFrankaClient:
             _log.error(f"Error in open_gripper: {e}")
             return {"success": False, "error": str(e)}
 
-    def close_gripper(self, speed: float = 0.05, force: float = 0.8) -> dict:
+    def close_gripper(self, speed: float = 0.05, force: float = 0.8, blocking: bool = True) -> dict:
         """Close the gripper.
 
         Args:
@@ -399,7 +400,8 @@ class BambooFrankaClient:
             command = {
                 "action": "close",
                 "speed": speed,
-                "force": force
+                "force": force,
+                "blocking": blocking
             }
             response = self._send_gripper_command(command)
             return response

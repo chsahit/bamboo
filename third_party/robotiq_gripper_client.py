@@ -13,8 +13,7 @@ log = logging.getLogger(__name__)
 
 
 class RobotiqGripperClient:
-    """gRPC client that exposes controls of a Robotiq gripper to a PolymetisGripperServer
-    Communicates with the gripper through modbus
+    """client that exposes controls of a Robotiq gripper.
     """
 
     def __init__(self, comport="/dev/ttyUSB0", hz=60):
@@ -38,8 +37,8 @@ class RobotiqGripperClient:
         time.sleep(1)
         self.gripper.activate_gripper()
         self.gripper.sendCommand()
-        print("Sleeping to wait for mr gripper!")
         time.sleep(3)
+
         if (
                 self.gripper.is_ready()
                 and self.gripper.sendCommand()

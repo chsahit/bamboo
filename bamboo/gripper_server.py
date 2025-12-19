@@ -42,6 +42,14 @@ class GripperServer:
 
         self.running = True
 
+    def spin_until_done(self, timeout: float=5.0) -> None:
+        done_time = time.time() + timeout
+        while time.time() < done_time:
+            time.sleep(0.1)
+            state = self.gripper.get_gripper_state()
+            if not state["is_moving"]:
+                return
+
     def handle_command(self, command: dict) -> dict:
         """Handle a gripper command.
 
@@ -60,12 +68,16 @@ class GripperServer:
                 force = command.get('force', 0.1)
                 max_gripper_width = 0.085
                 self.gripper.apply_gripper_command(width=max_gripper_width, speed=speed, force=force)
+                if command.get('blocking', True):
+                    self.spin_until_done()
                 return {"success": True}
 
             elif action == 'close':
                 speed = command.get('speed', 0.05)
                 force = command.get('force', 0.1)
                 self.gripper.apply_gripper_command(width=0.0, speed=speed, force=force)
+                if command.get('blocking', True):
+                    self.spin_until_done()
                 return {"success": True}
 
             elif action == 'get_state':
