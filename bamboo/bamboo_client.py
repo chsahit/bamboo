@@ -236,6 +236,7 @@ class BambooFrankaClient:
 
             # Build trajectory request with all waypoints
             waypoints = []
+            total_duration = 0.0
 
             # Create each waypoint as a TimedWaypoint
             for i, joint_conf in enumerate(joint_confs):
@@ -249,11 +250,17 @@ class BambooFrankaClient:
                     if len(joint_vel) != 7:
                         raise ValueError(f"Joint velocity {i} must have 7 values, got {len(joint_vel)}")
 
+                # Get waypoint duration
+                waypoint_duration = durations[i] if (durations is not None and i < len(durations)) else default_duration
+                if waypoint_duration <= 0:
+                    waypoint_duration = default_duration
+                total_duration += waypoint_duration
+
                 # Create timed waypoint
                 waypoint = {
                     "goal_q": list(joint_conf),
                     "velocity": list(joint_vel) if joint_vel is not None else [],
-                    "duration": durations[i] if (durations is not None and i < len(durations)) else 0.0,
+                    "duration": waypoint_duration,
                     "kp": [600.0] * 7,  # Default stiffness
                     "kd": [50.0] * 7,   # Default damping
                 }
@@ -273,13 +280,28 @@ class BambooFrankaClient:
                 "data": trajectory_request
             }
 
-            # Send trajectory to control node and wait for completion
-            _log.debug("Sending trajectory to control node...")
-            self.control_socket.send(msgpack.packb(request))
+            # Calculate appropriate timeout (total duration + buffer for settling + safety margin)
+            # Add 2 seconds for robot settling time plus 50% safety margin
+            trajectory_timeout_ms = int((total_duration + 2.0) * 1.5 * 1000)
+            # Minimum timeout of 100ms
+            trajectory_timeout_ms = max(trajectory_timeout_ms, 100)
 
-            # Receive response (this will block until trajectory completes)
-            response_data = self.control_socket.recv()
-            response = msgpack.unpackb(response_data, raw=False)
+            # Temporarily set socket timeout for this trajectory
+            old_timeout = self.control_socket.getsockopt(zmq.RCVTIMEO)
+            self.control_socket.setsockopt(zmq.RCVTIMEO, trajectory_timeout_ms)
+            _log.debug(f"Set trajectory timeout to {trajectory_timeout_ms/1000.0:.1f}s for {total_duration:.1f}s trajectory")
+
+            try:
+                # Send trajectory to control node and wait for completion
+                _log.debug("Sending trajectory to control node...")
+                self.control_socket.send(msgpack.packb(request))
+
+                # Receive response (this will block until trajectory completes)
+                response_data = self.control_socket.recv()
+                response = msgpack.unpackb(response_data, raw=False)
+            finally:
+                # Restore original timeout
+                self.control_socket.setsockopt(zmq.RCVTIMEO, old_timeout)
 
             if response.get("success", False):
                 _log.debug("Trajectory completed successfully")
