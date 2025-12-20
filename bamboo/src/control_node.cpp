@@ -612,7 +612,11 @@ void RunServer(const std::string &server_address, franka::Robot *robot,
     try {
       // Receive message
       zmq::message_t request_msg;
-      auto result = socket.recv(request_msg, 0);
+#if CPPZMQ_VERSION >= ZMQ_MAKE_VERSION(4, 3, 0)
+      auto result = socket.recv(request_msg, zmq::recv_flags::none);
+#else
+      auto result = socket.recv(&request_msg, 0);
+#endif
 
       if (!result) {
         continue;
@@ -651,7 +655,11 @@ void RunServer(const std::string &server_address, franka::Robot *robot,
 
       // Send response
       zmq::message_t response_msg(response_buf.data(), response_buf.size());
-      socket.send(response_msg, 0);
+#if CPPZMQ_VERSION >= ZMQ_MAKE_VERSION(4, 3, 0)
+      socket.send(response_msg, zmq::send_flags::none);
+#else
+      socket.send(&response_msg, 0);
+#endif
 
     } catch (const zmq::error_t &e) {
       if (e.num() == EINTR || global_shutdown) {
