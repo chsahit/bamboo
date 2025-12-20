@@ -14,10 +14,11 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <vector>
+#include <map>
 
-#include <grpcpp/ext/proto_server_reflection_plugin.h>
-#include <grpcpp/grpcpp.h>
-#include <grpcpp/health_check_service_interface.h>
+#include <zmq.hpp>
+#include <msgpack.hpp>
 
 #include <franka/exception.h>
 #include <franka/model.h>
@@ -28,15 +29,7 @@
 
 #include "controllers/joint_impedance_controller.h"
 #include "interpolators/min_jerk_interpolator.h"
-
-// Protobuf messages
-#include "bamboo_service.grpc.pb.h"
-#include "franka_controller.pb.h"
-
-using grpc::Server;
-using grpc::ServerBuilder;
-using grpc::ServerContext;
-using grpc::Status;
+#include "bamboo_messages.h"
 
 // Global flag for signal handling
 std::atomic<bool> global_shutdown{false};
@@ -58,33 +51,6 @@ std::exception_ptr getThreadException() {
   return thread_exception_ptr;
 }
 
-// Helper function to populate robot state message
-void populateRobotState(FrankaRobotStateMessage &robot_state_msg,
-                        const franka::RobotState &robot_state) {
-  // Clear previous data
-  robot_state_msg.clear_q();
-  robot_state_msg.clear_dq();
-  robot_state_msg.clear_tau_j();
-  robot_state_msg.clear_o_t_ee();
-
-  // Add joint positions, velocities, and torques
-  for (size_t i = 0; i < 7; ++i) {
-    robot_state_msg.add_q(robot_state.q[i]);
-    robot_state_msg.add_dq(robot_state.dq[i]);
-    robot_state_msg.add_tau_j(robot_state.tau_J[i]);
-  }
-
-  // Add end-effector pose (4x4 transformation matrix: O_T_EE)
-  for (size_t i = 0; i < 16; ++i) {
-    robot_state_msg.add_o_t_ee(robot_state.O_T_EE[i]);
-  }
-
-  // Add basic timing information
-  FrankaRobotStateMessage::Duration *time = robot_state_msg.mutable_time();
-  time->set_tosec(robot_state.time.toSec());
-  time->set_tomsec(robot_state.time.toMSec());
-}
-
 // Signal handler for graceful shutdown
 void signalHandler(int signal) {
   if (signal == SIGINT) {
@@ -93,9 +59,8 @@ void signalHandler(int signal) {
   }
 }
 
-// gRPC service implementation
-class BambooControlServiceImpl final
-    : public bamboo::BambooControlService::Service {
+// Server implementation
+class BambooControlServer {
 private:
   franka::Robot *robot_;
   franka::Model *model_;
@@ -107,8 +72,7 @@ private:
   // Control parameters
   const int traj_rate_ = 500; // Hz
   const double max_time = 1.0;
-  const bool log_err_ =
-      true; // Set to true to enable error logging (may add latency)
+  const bool log_err_ = true;
 
   Eigen::Matrix<double, 7, 1> current_q_;
   Eigen::Matrix<double, 7, 1> goal_q_;
@@ -121,7 +85,7 @@ private:
   const double diff_low_pass_freq_ = 30.0; // Hz
 
 public:
-  BambooControlServiceImpl(
+  BambooControlServer(
       franka::Robot *robot, franka::Model *model,
       bamboo::controllers::JointImpedanceController *controller,
       bamboo::interpolators::MinJerkInterpolator *interpolator)
@@ -141,45 +105,52 @@ public:
               << std::endl;
   }
 
-  Status GetRobotState(ServerContext * /* context */,
-                       const bamboo::RobotStateRequest * /* request */,
-                       FrankaRobotStateMessage *response) override {
+  bamboo_msgs::RobotState GetRobotState() {
     try {
       // Get current robot state
       franka::RobotState current_state = robot_->readOnce();
 
-      // Populate response message
-      populateRobotState(*response, current_state);
+      bamboo_msgs::RobotState state_msg;
 
-      return Status::OK;
+      // Add joint positions, velocities, and torques
+      state_msg.q.resize(7);
+      state_msg.dq.resize(7);
+      state_msg.tau_J.resize(7);
+      for (size_t i = 0; i < 7; ++i) {
+        state_msg.q[i] = current_state.q[i];
+        state_msg.dq[i] = current_state.dq[i];
+        state_msg.tau_J[i] = current_state.tau_J[i];
+      }
+
+      // Add end-effector pose (4x4 transformation matrix: O_T_EE)
+      state_msg.O_T_EE.resize(16);
+      for (size_t i = 0; i < 16; ++i) {
+        state_msg.O_T_EE[i] = current_state.O_T_EE[i];
+      }
+
+      // Add timing information
+      state_msg.time_sec = current_state.time.toSec();
+
+      return state_msg;
     } catch (const franka::Exception &e) {
-      return Status(grpc::StatusCode::INTERNAL,
-                    std::string("Franka exception: ") + e.what());
+      throw std::runtime_error(std::string("Franka exception: ") + e.what());
     } catch (const std::exception &e) {
-      return Status(grpc::StatusCode::INTERNAL,
-                    std::string("Exception: ") + e.what());
+      throw std::runtime_error(std::string("Exception: ") + e.what());
     }
   }
 
-  Status ExecuteJointImpedanceTrajectory(
-      ServerContext * /* context */,
-      const bamboo::JointImpedanceTrajectoryRequest *request,
-      FrankaCommandResponse *response) override {
-
-    std::cout << "[GRPC] Received trajectory with " << request->waypoints_size()
+  bool ExecuteJointImpedanceTrajectory(const bamboo_msgs::TrajectoryRequest &request) {
+    std::cout << "[SERVER] Received trajectory with " << request.waypoints.size()
               << " waypoints" << std::endl;
 
     try {
       // Check if already running
       if (control_running_.load()) {
-        response->set_success(false);
-        return Status(grpc::StatusCode::RESOURCE_EXHAUSTED,
-                      "Control loop already running");
+        throw std::runtime_error("Control loop already running");
       }
 
-      if (request->waypoints_size() == 0) {
-        response->set_success(false);
-        return Status(grpc::StatusCode::INVALID_ARGUMENT, "Empty trajectory");
+      if (request.waypoints.empty()) {
+        throw std::runtime_error("Empty trajectory");
       }
 
       // Parse and prepare all waypoints
@@ -187,106 +158,79 @@ public:
       std::vector<Eigen::Matrix<double, 7, 1>> trajectory_velocities;
       std::vector<double> trajectory_durations;
 
-      for (int i = 0; i < request->waypoints_size(); ++i) {
-        const bamboo::TimedWaypoint &timed_waypoint = request->waypoints(i);
-        const FrankaControlMessage &waypoint = timed_waypoint.waypoint();
+      for (size_t i = 0; i < request.waypoints.size(); ++i) {
+        const bamboo_msgs::TimedWaypoint &waypoint = request.waypoints[i];
+
+        // Validate goal has 7 values
+        if (waypoint.goal_q.size() != 7) {
+          throw std::runtime_error("Joint configuration must have 7 values");
+        }
 
         // Get waypoint duration
         double waypoint_duration;
-        if (timed_waypoint.duration() > 0) {
-          waypoint_duration = timed_waypoint.duration();
-        } else if (request->default_duration() > 0) {
-          waypoint_duration = request->default_duration();
+        if (waypoint.duration > 0) {
+          waypoint_duration = waypoint.duration;
+        } else if (request.default_duration > 0) {
+          waypoint_duration = request.default_duration;
         } else {
           waypoint_duration = 0.5; // Fallback default
         }
 
         // Get waypoint velocity
-        Eigen::Matrix<double, 7, 1> waypoint_velocity =
-            Eigen::Matrix<double, 7, 1>::Zero();
-        if (timed_waypoint.velocity_size() == 7) {
+        Eigen::Matrix<double, 7, 1> waypoint_velocity = Eigen::Matrix<double, 7, 1>::Zero();
+        if (waypoint.velocity.size() == 7) {
           // Use waypoint-specific velocity if provided
           for (int j = 0; j < 7; ++j) {
-            waypoint_velocity(j) = timed_waypoint.velocity(j);
+            waypoint_velocity(j) = waypoint.velocity[j];
           }
-        } else if (request->default_velocity_size() == 7) {
+        } else if (request.default_velocity.size() == 7) {
           // Use default velocity if provided
           for (int j = 0; j < 7; ++j) {
-            waypoint_velocity(j) = request->default_velocity(j);
+            waypoint_velocity(j) = request.default_velocity[j];
           }
         }
         // If neither is provided, waypoint_velocity remains zero
 
         // Check for termination
-        if (waypoint.termination() || global_shutdown) {
-          std::cout << "[GRPC] Termination requested" << std::endl;
+        if (global_shutdown) {
+          std::cout << "[SERVER] Termination requested" << std::endl;
           break;
-        }
-
-        // Extract joint impedance goal
-        FrankaJointImpedanceControllerMessage ji_msg;
-        if (!waypoint.control_msg().UnpackTo(&ji_msg)) {
-          response->set_success(false);
-          return Status(grpc::StatusCode::INVALID_ARGUMENT,
-                        "Failed to unpack joint impedance message");
         }
 
         // Store goal position
         Eigen::Matrix<double, 7, 1> goal;
-        goal << ji_msg.goal().q1(), ji_msg.goal().q2(), ji_msg.goal().q3(),
-            ji_msg.goal().q4(), ji_msg.goal().q5(), ji_msg.goal().q6(),
-            ji_msg.goal().q7();
+        for (int j = 0; j < 7; ++j) {
+          goal(j) = waypoint.goal_q[j];
+        }
 
         trajectory_goals.push_back(goal);
         trajectory_velocities.push_back(waypoint_velocity);
         trajectory_durations.push_back(waypoint_duration);
-
-        // std::cout << "[GRPC] Waypoint " << i+1 << "/" <<
-        // request->waypoints_size()
-        //           << " (duration: " << waypoint_duration << "s): " <<
-        //           goal.transpose() << std::endl;
       }
 
       // Execute entire trajectory in single control call
       bool success = executeTrajectory(trajectory_goals, trajectory_velocities,
                                        trajectory_durations);
       if (!success) {
-        response->set_success(false);
-        return Status(grpc::StatusCode::INTERNAL,
-                      "Trajectory execution failed");
+        throw std::runtime_error("Trajectory execution failed");
       }
 
-      std::cout << "[GRPC] Trajectory completed successfully" << std::endl;
-      response->set_success(true);
-      return Status::OK;
+      std::cout << "[SERVER] Trajectory completed successfully" << std::endl;
+      return true;
 
     } catch (const franka::ControlException &e) {
-      std::cerr << "[GRPC] Control exception: " << e.what() << std::endl;
-      response->set_success(false);
-      return Status(grpc::StatusCode::INTERNAL,
-                    std::string("Control exception: ") + e.what());
+      std::cerr << "[SERVER] Control exception: " << e.what() << std::endl;
+      throw;
     } catch (const std::exception &e) {
-      std::cerr << "[GRPC] Exception: " << e.what() << std::endl;
-      response->set_success(false);
-      return Status(grpc::StatusCode::INTERNAL,
-                    std::string("Exception: ") + e.what());
+      std::cerr << "[SERVER] Exception: " << e.what() << std::endl;
+      throw;
     }
   }
 
-  Status Terminate(ServerContext * /* context */,
-                   const bamboo::TerminateRequest * /* request */,
-                   FrankaCommandResponse *response) override {
-    std::cout << "[GRPC] Terminate request received" << std::endl;
-    global_shutdown = true;
-    response->set_success(true);
-    return Status::OK;
-  }
-
 private:
-  bool
-  executeTrajectory(const std::vector<Eigen::Matrix<double, 7, 1>> &goals,
-                    const std::vector<Eigen::Matrix<double, 7, 1>> &velocities,
-                    const std::vector<double> &durations) {
+  bool executeTrajectory(const std::vector<Eigen::Matrix<double, 7, 1>> &goals,
+                        const std::vector<Eigen::Matrix<double, 7, 1>> &velocities,
+                        const std::vector<double> &durations) {
     if (goals.empty())
       return false;
 
@@ -418,10 +362,6 @@ private:
             interpolator_->Reset(control_time, current_q_, goal_q_,
                                  prev_velocity, curr_velocity, traj_rate_,
                                  durations[current_waypoint]);
-
-            // std::cout << "[CONTROL] Moving to waypoint " << current_waypoint
-            // + 1
-            //           << "/" << goals.size() << std::endl;
           }
         }
 
@@ -564,30 +504,167 @@ private:
   }
 };
 
+// Message parsing helpers
+std::string parseCommand(const std::map<std::string, msgpack::object> &request_map) {
+  std::string command;
+  auto it = request_map.find("command");
+  if (it != request_map.end()) {
+    it->second.convert(command);
+  }
+  return command;
+}
+
+msgpack::sbuffer handleGetRobotState(BambooControlServer &server) {
+  bamboo_msgs::RobotState state = server.GetRobotState();
+
+  msgpack::sbuffer response_buf;
+  msgpack::packer<msgpack::sbuffer> packer(response_buf);
+
+  packer.pack_map(2);
+  packer.pack("success");
+  packer.pack(true);
+  packer.pack("data");
+  packer.pack(state);
+
+  return response_buf;
+}
+
+msgpack::sbuffer handleExecuteTrajectory(BambooControlServer &server,
+                                         const std::map<std::string, msgpack::object> &request_map) {
+  bamboo_msgs::TrajectoryRequest traj_req;
+  auto it = request_map.find("data");
+  if (it != request_map.end()) {
+    it->second.convert(traj_req);
+  }
+
+  bool success = server.ExecuteJointImpedanceTrajectory(traj_req);
+
+  msgpack::sbuffer response_buf;
+  msgpack::packer<msgpack::sbuffer> packer(response_buf);
+
+  packer.pack_map(2);
+  packer.pack("success");
+  packer.pack(success);
+  packer.pack("error");
+  packer.pack(std::string(""));
+
+  return response_buf;
+}
+
+msgpack::sbuffer handleTerminate() {
+  std::cout << "[SERVER] Terminate request received" << std::endl;
+  global_shutdown = true;
+
+  msgpack::sbuffer response_buf;
+  msgpack::packer<msgpack::sbuffer> packer(response_buf);
+
+  packer.pack_map(2);
+  packer.pack("success");
+  packer.pack(true);
+  packer.pack("error");
+  packer.pack(std::string(""));
+
+  return response_buf;
+}
+
+msgpack::sbuffer handleUnknownCommand(const std::string &command) {
+  msgpack::sbuffer response_buf;
+  msgpack::packer<msgpack::sbuffer> packer(response_buf);
+
+  packer.pack_map(2);
+  packer.pack("success");
+  packer.pack(false);
+  packer.pack("error");
+  packer.pack(std::string("Unknown command: ") + command);
+
+  return response_buf;
+}
+
+msgpack::sbuffer handleError(const std::string &error_msg) {
+  msgpack::sbuffer response_buf;
+  msgpack::packer<msgpack::sbuffer> packer(response_buf);
+
+  packer.pack_map(2);
+  packer.pack("success");
+  packer.pack(false);
+  packer.pack("error");
+  packer.pack(error_msg);
+
+  return response_buf;
+}
+
 void RunServer(const std::string &server_address, franka::Robot *robot,
                franka::Model *model,
                bamboo::controllers::JointImpedanceController *controller,
                bamboo::interpolators::MinJerkInterpolator *interpolator) {
 
-  BambooControlServiceImpl service(robot, model, controller, interpolator);
+  BambooControlServer server(robot, model, controller, interpolator);
 
-  grpc::EnableDefaultHealthCheckService(true);
-  grpc::reflection::InitProtoReflectionServerBuilderPlugin();
+  // Create context and socket
+  zmq::context_t context(1);
+  zmq::socket_t socket(context, zmq::socket_type::rep);
+  socket.bind(server_address);
 
-  ServerBuilder builder;
-  builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-  builder.RegisterService(&service);
+  std::cout << "Server listening on " << server_address << std::endl;
 
-  std::unique_ptr<Server> server(builder.BuildAndStart());
-  std::cout << "gRPC server listening on " << server_address << std::endl;
-
-  // Wait for shutdown
+  // Message handling loop
   while (!global_shutdown) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    try {
+      // Receive message
+      zmq::message_t request_msg;
+      auto result = socket.recv(request_msg, zmq::recv_flags::none);
+
+      if (!result) {
+        continue;
+      }
+
+      // Unpack the request
+      msgpack::object_handle oh = msgpack::unpack(
+          static_cast<const char*>(request_msg.data()),
+          request_msg.size());
+      msgpack::object obj = oh.get();
+
+      // Parse as a map to get the command
+      std::map<std::string, msgpack::object> request_map;
+      obj.convert(request_map);
+
+      std::string command = parseCommand(request_map);
+      std::cout << "[SERVER] Received command: " << command << std::endl;
+
+      // Handle the command
+      msgpack::sbuffer response_buf;
+
+      try {
+        if (command == "get_robot_state") {
+          response_buf = handleGetRobotState(server);
+        } else if (command == "execute_trajectory") {
+          response_buf = handleExecuteTrajectory(server, request_map);
+        } else if (command == "terminate") {
+          response_buf = handleTerminate();
+        } else {
+          response_buf = handleUnknownCommand(command);
+        }
+      } catch (const std::exception &e) {
+        std::cerr << "[SERVER] Error handling command: " << e.what() << std::endl;
+        response_buf = handleError(e.what());
+      }
+
+      // Send response
+      zmq::message_t response_msg(response_buf.data(), response_buf.size());
+      socket.send(response_msg, zmq::send_flags::none);
+
+    } catch (const zmq::error_t &e) {
+      if (e.num() == EINTR || global_shutdown) {
+        break;
+      }
+      std::cerr << "[SERVER] Error: " << e.what() << std::endl;
+    } catch (const std::exception &e) {
+      std::cerr << "[SERVER] Exception in message loop: " << e.what() << std::endl;
+    }
   }
 
-  std::cout << "Shutting down gRPC server..." << std::endl;
-  server->Shutdown();
+  std::cout << "Shutting down server..." << std::endl;
+  socket.close();
 }
 
 int main(int argc, char **argv) {
@@ -595,17 +672,17 @@ int main(int argc, char **argv) {
   std::signal(SIGINT, signalHandler);
 
   if (argc != 3) {
-    std::cerr << "Usage: " << argv[0] << " <robot-ip> <grpc-port>" << std::endl;
+    std::cerr << "Usage: " << argv[0] << " <robot-ip> <port>" << std::endl;
     return -1;
   }
 
   const std::string robot_ip = argv[1];
-  const std::string grpc_port = argv[2];
-  const std::string server_address = "0.0.0.0:" + grpc_port;
+  const std::string port = argv[2];
+  const std::string server_address = "tcp://*:" + port;
 
-  std::cout << "Bamboo Control Node (gRPC) Starting..." << std::endl;
+  std::cout << "Bamboo Control Node Starting..." << std::endl;
   std::cout << "Robot IP: " << robot_ip << std::endl;
-  std::cout << "gRPC Port: " << grpc_port << std::endl;
+  std::cout << "Port: " << port << std::endl;
 
   try {
     // Connect to robot
@@ -627,7 +704,7 @@ int main(int argc, char **argv) {
     bamboo::controllers::JointImpedanceController controller(&model);
     bamboo::interpolators::MinJerkInterpolator interpolator;
 
-    // Start gRPC server
+    // Start server
     RunServer(server_address, &robot, &model, &controller, &interpolator);
 
     std::cout << "Control node terminated successfully" << std::endl;

@@ -51,38 +51,3 @@ INSTALL_LIB_PATH="$SCRIPT_DIR/install/lib"
 
 echo "Libraries installed to: $INSTALL_LIB_PATH"
 
-# Add to bashrc if not already present
-if ! grep -q "$INSTALL_LIB_PATH" "$HOME/.bashrc"; then
-    echo "" >> "$HOME/.bashrc"
-    echo "# Added by libfranka InstallPackage script" >> "$HOME/.bashrc"
-    echo "export LD_LIBRARY_PATH=\"$INSTALL_LIB_PATH:/opt/openrobots/lib:\$LD_LIBRARY_PATH\"" >> "$HOME/.bashrc"
-    echo "Added LD_LIBRARY_PATH to ~/.bashrc"
-fi
-
-# Export for current session
-export LD_LIBRARY_PATH="$INSTALL_LIB_PATH:/opt/openrobots/lib:$LD_LIBRARY_PATH"
-
-# download protobuf
-cd "$SCRIPT_DIR/third_party"
-run_quiet "protobuf: git clone" git clone --recursive https://github.com/protocolbuffers/protobuf.git
-cd protobuf
-run_quiet "protobuf: git checkout v33.0" git checkout v33.0
-run_quiet "protobuf: git submodule update" git submodule update --init --recursive
-
-# Use cmake instead of bazel to avoid compiler issues
-mkdir -p build
-cd build
-run_quiet "protobuf: cmake configure" cmake .. -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -Dprotobuf_BUILD_TESTS=OFF
-run_quiet "protobuf: build" make -j$(nproc)
-run_quiet "protobuf: install" make install
-
-# Clone and build gRPC
-cd "$SCRIPT_DIR/third_party"
-run_quiet "grpc: git clone" git clone --recurse-submodules -b v1.66.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc
-cd grpc
-mkdir build
-cd build
-run_quiet "grpc: cmake configure" cmake -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" ..
-run_quiet "grpc: build" make -j$(nproc)
-run_quiet "grpc: install" make install
-
