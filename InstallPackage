@@ -50,4 +50,11 @@ run_quiet "libfranka: install" make install
 INSTALL_LIB_PATH="$SCRIPT_DIR/install/lib"
 
 echo "Libraries installed to: $INSTALL_LIB_PATH"
+# Add to bashrc if not already present
+if ! grep -q "$INSTALL_LIB_PATH" "$HOME/.bashrc"; then
+    echo "" >> "$HOME/.bashrc"
+    echo "# Added by libfranka InstallPackage script" >> "$HOME/.bashrc"
+    echo "export LD_LIBRARY_PATH=\"$INSTALL_LIB_PATH:/opt/openrobots/lib:\$LD_LIBRARY_PATH\"" >> "$HOME/.bashrc"
+    echo "Added LD_LIBRARY_PATH to ~/.bashrc"
+fi
 
