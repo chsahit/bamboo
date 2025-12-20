@@ -13,7 +13,7 @@ namespace bamboo_msgs {
     std::vector<double> O_T_EE;      // End-effector pose (16 - 4x4 matrix)
     double time_sec;
 
-    MSGPACK_DEFINE(q, dq, tau_J, O_T_EE, time_sec)
+    MSGPACK_DEFINE_MAP(q, dq, tau_J, O_T_EE, time_sec)
   };
 
   // Waypoint with timing information
@@ -24,7 +24,7 @@ namespace bamboo_msgs {
     std::vector<double> kp;          // Stiffness (7)
     std::vector<double> kd;          // Damping (7)
 
-    MSGPACK_DEFINE(goal_q, velocity, duration, kp, kd)
+    MSGPACK_DEFINE_MAP(goal_q, velocity, duration, kp, kd)
   };
 
   // Trajectory request
@@ -33,6 +33,6 @@ namespace bamboo_msgs {
     double default_duration;
     std::vector<double> default_velocity;
 
-    MSGPACK_DEFINE(waypoints, default_duration, default_velocity)
+    MSGPACK_DEFINE_MAP(waypoints, default_duration, default_velocity)
   };
 }
