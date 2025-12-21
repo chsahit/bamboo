@@ -164,9 +164,9 @@ while true; do
     fi
 done
 
-# Now activate environment and install Bamboo
+# Now activate environment and install Bamboo with server dependencies
 conda activate "$env_name"
-run_quiet "bamboo: installing Python package" pip install -e "$SCRIPT_DIR"
+run_quiet "bamboo: installing Python package with server dependencies" pip install -e "$SCRIPT_DIR[server]"
 
 # Deal with the C++ build
 BUILD_DIR="$SCRIPT_DIR/bamboo/build"

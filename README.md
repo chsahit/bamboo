@@ -21,20 +21,23 @@ These steps may require administrator privileges.
 
 Make sure that the user is in the realtime group with `sudo usermod -a -G realtime $USER`
 
-You do not need to install `libfranka` yourself — the included `InstallPackage` script will clone, build, and set up libfranka.
+You do not need to install `libfranka` yourself — the included `InstallBambooController` script will clone, build, and set up libfranka.
 
 ### Build C++ Dependencies
 ```bash
-bash InstallPackage
+bash InstallBambooController
 ```
 You will be prompted to enter the version of libfranka to install. This can be determined by checking the FCI version in the Franka Desk (under Settings > Dashboard > Control) and then consulting the [FCI Compatability Table](https://frankarobotics.github.io/docs/compatibility.html) for a compatible `libfranka` version. 
 
 
 ### Install Python Package
+
+The `InstallBambooController` script handles this automatically with server dependencies included. If you need to install manually:
+
 ```bash
 conda create -n bamboo python=3.10
 conda activate bamboo
-pip install -e .
+pip install -e .[server]
 ```
 
 ### Compile Controller
@@ -46,7 +49,7 @@ make
 
 ## Bamboo Client Installation
 
-You should install the Bamboo client on any machine that will talk to the control node.
+You should install the Bamboo client on any machine that will talk to the control node. This installation only includes the client dependencies (numpy, pyzmq, msgpack) and not the hardware control dependencies.
 
 **Install from GitHub repository:**
 
@@ -60,6 +63,12 @@ pip install git+https://github.com/chsahit/bamboo.git
 git clone https://github.com/chsahit/bamboo.git
 cd bamboo
 pip install -e .
+```
+
+**If you need gripper server dependencies** (pyserial, pymodbus) on a non-control node machine:
+
+```bash
+pip install -e .[server]
 ```
 
 ## Usage
