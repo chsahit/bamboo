@@ -1,10 +1,13 @@
 # Bamboo Franka Controller
 
-A lightweight package for controlling the Franka Emika FR3 with joint impedance control. 
+A lightweight package for controlling the Franka Emika FR3 and Panda with joint impedance control. 
 
-A single real-time controller machine runs the control node and maintains the real-time link with the FR3. Other machines can connect to this node via gRPC to issue commands or receive robot state.
+A single real-time controller machine runs the control node and maintains the real-time link with the FR3/Panda.
+Other machines can connect to this node using the Bamboo client via ZMQ to issue commands or receive robot state.
 
 ## Control Node Installation
+
+Install the control node on the real-time control machine that is directly connected to the Franka robot.
 
 ### Prerequisites
 Ensure that the system satisfies the [`libfranka` system requirements](https://github.com/frankarobotics/libfranka/tree/release-0.15.2?tab=readme-ov-file#1-system-requirements) and that the the [`libfranka` dependencies](https://github.com/frankarobotics/libfranka/tree/release-0.15.2?tab=readme-ov-file#1-system-requirements) are installed. 
@@ -26,7 +29,6 @@ bash InstallPackage
 ```
 You will be prompted to enter the version of libfranka to install. This can be determined by checking the FCI version in the Franka Desk (under Settings > Dashboard > Control) and then consulting the [FCI Compatability Table](https://frankarobotics.github.io/docs/compatibility.html) for a compatible `libfranka` version. 
 
-NB: Cloning and building `grpc` can take a long time due to the large number of submodules, this is expected behavior.
 
 ### Install Python Package
 ```bash
@@ -42,10 +44,21 @@ cmake ..
 make
 ```
 
-## Client Installation
+## Bamboo Client Installation
+
+You should install the Bamboo client on any machine that will talk to the control node.
+
+**Install from GitHub repository:**
+
 ```bash
-conda create -n bamboo python=3.10
-conda activate bamboo
+pip install git+https://github.com/chsahit/bamboo.git
+```
+
+**Install from source:**
+
+```bash
+git clone https://github.com/chsahit/bamboo.git
+cd bamboo
 pip install -e .
 ```
 
@@ -57,7 +70,7 @@ First, run the C++ control node
 ```bash
 conda activate bamboo
 cd bamboo/build
-./bamboo_control_node <robot-ip> <grpc-port>
+./bamboo_control_node <robot-ip> <zmq-port>
 ```
 
 Example:
@@ -103,4 +116,6 @@ For the python code we enforce style with `ruff` and typechecking with `mypy`. F
 To contribute, please create a fork of the repository, make a feature branch based on main, and commit your changes there. Then open a pull request from that branch.
 
 ## Acknowledgements
-This work draws heavily from [deoxys\_control](https://github.com/UT-Austin-RPL/deoxys_control) and [drake-franka-driver](https://github.com/RobotLocomotion/drake-franka-driver). Thanks to developers for their open-source code!
+
+This work draws heavily from [deoxys\_control](https://github.com/UT-Austin-RPL/deoxys_control) and [drake-franka-driver](https://github.com/RobotLocomotion/drake-franka-driver).
+Thanks to the developers for their open-source code!
