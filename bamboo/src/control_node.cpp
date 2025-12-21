@@ -68,6 +68,7 @@ private:
   bamboo::interpolators::MinJerkInterpolator *interpolator_;
 
   std::atomic<bool> control_running_{false};
+  std::atomic<bool> joint_limit_hit_{false};
 
   // Control parameters
   const int traj_rate_ = 500; // Hz
@@ -235,6 +236,7 @@ private:
       return false;
 
     control_running_ = true;
+    joint_limit_hit_ = false;
     double control_time = 0.0;
 
     // Reset velocity and acceleration tracking for new trajectory
@@ -390,12 +392,31 @@ private:
         }
 
         // Compute control torques
-        std::array<double, 7> tau_d =
+        bamboo::controllers::ControllerResult result =
             controller_->Step(robot_state, desired_q, desired_dq, desired_ddq);
+
+        // Check for any limit violation (position or torque)
+        if (result.joint_position_limit_violated || result.torque_limit_violated) {
+          joint_limit_hit_ = true;
+          std::cout << "[CONTROL] ";
+          if (result.joint_position_limit_violated) {
+            std::cout << "Joint position limit violated";
+          }
+          if (result.joint_position_limit_violated && result.torque_limit_violated) {
+            std::cout << " and ";
+          }
+          if (result.torque_limit_violated) {
+            std::cout << "Torque limit violated";
+          }
+          std::cout << " - ending trajectory early" << std::endl;
+          std::array<double, 7> zero_torques = {0.0, 0.0, 0.0, 0.0,
+                                                0.0, 0.0, 0.0};
+          return franka::MotionFinished(franka::Torques(zero_torques));
+        }
 
         // Apply rate limiting
         std::array<double, 7> tau_d_rate_limited = franka::limitRate(
-            franka::kMaxTorqueRate, tau_d, robot_state.tau_J_d);
+            franka::kMaxTorqueRate, result.torques, robot_state.tau_J_d);
 
         // Check if all waypoints completed and robot has stopped
         if (current_waypoint >= goals.size() - 1 &&
@@ -466,6 +487,13 @@ private:
       // Execute control
       robot_->control(control_callback);
       control_running_ = false;
+
+      // Check if trajectory failed due to joint limit violation
+      if (joint_limit_hit_) {
+        std::cerr << "[TRAJECTORY] Trajectory failed due to joint limit violation"
+                  << std::endl;
+        return false;
+      }
 
       if (log_err_) {
         // Print max joint error across all waypoint final errors
@@ -546,7 +574,11 @@ msgpack::sbuffer handleExecuteTrajectory(BambooControlServer &server,
   packer.pack("success");
   packer.pack(success);
   packer.pack("error");
-  packer.pack(std::string(""));
+  if (!success) {
+    packer.pack(std::string("Joint limit violated during trajectory execution"));
+  } else {
+    packer.pack(std::string(""));
+  }
 
   return response_buf;
 }
