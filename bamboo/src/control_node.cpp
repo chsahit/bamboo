@@ -658,7 +658,7 @@ void RunServer(const std::string &server_address, franka::Robot *robot,
 #if CPPZMQ_VERSION >= ZMQ_MAKE_VERSION(4, 3, 0)
       socket.send(response_msg, zmq::send_flags::none);
 #else
-      socket.send(&response_msg, 0);
+      socket.send(response_msg, 0);  // Old API uses reference, not pointer (https://github.com/zeromq/cppzmq/issues/69)
 #endif
 
     } catch (const zmq::error_t &e) {
