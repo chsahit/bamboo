@@ -7,11 +7,18 @@ A single real-time controller machine runs the control node and maintains the re
 ## Control Node Installation
 
 ### Prerequisites
-Ensure that the system satisfies the [`libfranka` system requirements](https://github.com/frankarobotics/libfranka/tree/release-0.15.2?tab=readme-ov-file#1-system-requirements) and that the the [`libfranka` dependencies](https://github.com/frankarobotics/libfranka/tree/release-0.15.2?tab=readme-ov-file#1-system-requirements) are installed. These steps may require administrator privileges.
+Ensure that the system satisfies the [`libfranka` system requirements](https://github.com/frankarobotics/libfranka/tree/release-0.15.2?tab=readme-ov-file#1-system-requirements) and that the the [`libfranka` dependencies](https://github.com/frankarobotics/libfranka/tree/release-0.15.2?tab=readme-ov-file#1-system-requirements) are installed. 
+
+Next, install `zmq` and related dependencies with
+```bash
+sudo apt install libzmq3-dev libmsgpack-dev libpoco-dev
+```
+
+These steps may require administrator privileges.
 
 Make sure that the user is in the realtime group with `sudo usermod -a -G realtime $USER`
 
-You do not need to install `libfranka` yourself — the included `InstallPackage` script will clone, build, and set up libfranka along with all additional dependencies at the user level.
+You do not need to install `libfranka` yourself — the included `InstallPackage` script will clone, build, and set up libfranka.
 
 ### Build C++ Dependencies
 ```bash

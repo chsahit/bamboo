@@ -5,15 +5,17 @@ project(bamboo)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Set path to locally built libfranka and our install directory
-set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libfranka/build" ${CMAKE_PREFIX_PATH})
+# Add our install directory to CMAKE_PREFIX_PATH so all packages can be found
+# (libfranka and other dependencies are installed here by InstallPackage)
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../install")
 
 # Set RPATH so the executable can find libfranka.so at runtime
-set(CMAKE_INSTALL_RPATH "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libfranka/build")
-set(CMAKE_BUILD_RPATH "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libfranka/build")
-
-# Add our install directory to CMAKE_PREFIX_PATH so all packages can be found
-list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../install")
+# Point to the install directory where InstallPackage puts the libraries
+set(CMAKE_INSTALL_RPATH "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib")
+set(CMAKE_BUILD_RPATH "${CMAKE_CURRENT_SOURCE_DIR}/../install/lib")
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 # Find required packages
 find_package(Franka REQUIRED)

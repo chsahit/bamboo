@@ -25,12 +25,30 @@ run_quiet() {
     fi
 }
 
-# Clone libfranka to third_party
+# Clone libfranka to third_party (or verify existing)
 cd "$SCRIPT_DIR"
 mkdir -p third_party
 cd third_party
-run_quiet "libfranka: git clone" git clone --recurse-submodules https://github.com/frankaemika/libfranka
-cd libfranka
+
+if [ -d "libfranka" ]; then
+    echo "Found existing libfranka directory, verifying repository integrity..."
+    cd libfranka
+
+    # Run git fsck to verify repository integrity
+    if run_quiet "libfranka: git fsck" git fsck --full; then
+        echo "Repository integrity check passed ✓"
+    else
+        echo "Repository integrity check failed. Removing and re-cloning..."
+        cd ..
+        rm -rf libfranka
+        run_quiet "libfranka: git clone" git clone --recurse-submodules https://github.com/frankaemika/libfranka
+        cd libfranka
+    fi
+else
+    echo "libfranka not found, cloning..."
+    run_quiet "libfranka: git clone" git clone --recurse-submodules https://github.com/frankaemika/libfranka
+    cd libfranka
+fi
 
 echo "Which libfranka version are you going to use? (tested on 0.14.0, but 0.13.0 should work as well)"
 read version
@@ -46,15 +64,6 @@ run_quiet "libfranka: cmake configure" cmake .. -DCMAKE_INSTALL_PREFIX="$SCRIPT_
 run_quiet "libfranka: build" make -j$(nproc)
 run_quiet "libfranka: install" make install
 
-# Get absolute path of the install directory
-INSTALL_LIB_PATH="$SCRIPT_DIR/install/lib"
-
-echo "Libraries installed to: $INSTALL_LIB_PATH"
-# Add to bashrc if not already present
-if ! grep -q "$INSTALL_LIB_PATH" "$HOME/.bashrc"; then
-    echo "" >> "$HOME/.bashrc"
-    echo "# Added by libfranka InstallPackage script" >> "$HOME/.bashrc"
-    echo "export LD_LIBRARY_PATH=\"$INSTALL_LIB_PATH:/opt/openrobots/lib:\$LD_LIBRARY_PATH\"" >> "$HOME/.bashrc"
-    echo "Added LD_LIBRARY_PATH to ~/.bashrc"
-fi
-
+echo ""
+echo "✓ libfranka installation complete!"
+echo "Installation directory: $SCRIPT_DIR/install"
