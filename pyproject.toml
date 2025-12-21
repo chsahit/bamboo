@@ -30,53 +30,18 @@ requires-python = ">=3.8"
 dependencies = [
     # Core scientific computing
     "numpy>=1.20.0",
-
     "pyzmq>=22.0.0",
 
     # Hardware communication
     "pyserial>=3.4",
     "pymodbus==2.5.3",
 
-    "pre-commit",
+    # Serialization
     "msgpack",
 ]
 
-[project.optional-dependencies]
-dev = [
-    # Development and testing
-    "pytest>=6.0.0",
-    "pytest-cov>=2.10.0",
-    "black>=21.0.0",
-    "isort>=5.0.0",
-    "flake8>=3.8.0",
-    "mypy>=0.800",
-]
-
-visualization = [
-    # Plotting and visualization
-    "matplotlib>=3.3.0",
-]
-
-all = [
-    # Development dependencies
-    "black>=21.0.0",
-    "isort>=5.0.0",
-    "flake8>=3.8.0",
-    "mypy>=0.800",
-    # Visualization dependencies
-    "matplotlib>=3.3.0",
-    "plotly>=5.0.0",
-    "seaborn>=0.11.0",
-]
-
 [project.urls]
-Homepage = "https://github.com/your-org/bamboo"
-Documentation = "https://bamboo-docs.readthedocs.io"
-Repository = "https://github.com/your-org/bamboo.git"
-"Bug Tracker" = "https://github.com/your-org/bamboo/issues"
-
-[project.scripts]
-bamboo-test-joint-offset = "bamboo.examples.test_joint_offset:main"
+Homepage = "https://github.com/chsahit/bamboo"
 
 [tool.setuptools]
 package-dir = {"" = "."}
@@ -84,92 +49,20 @@ package-dir = {"" = "."}
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["bamboo*"]
-exclude = ["tests*", "docs*", "protobuf*", "libfranka*", "minimal_joint_impedance*", "zmqpp*", "install*", "build*"]
+exclude = ["tests*", "docs*", "install*", "build*"]
 
 [tool.setuptools.package-data]
 "bamboo.examples" = ["*.proto", "*.py"]
 "bamboo.proto" = ["*.proto"]
 
 # Development tool configurations
-[tool.black]
-line-length = 88
-target-version = ['py38', 'py39', 'py310', 'py311']
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.eggs
-  | \.git
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | buck-out
-  | build
-  | dist
-  | protobuf
-  | libfranka
-  | install
-)/
-'''
-
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-line_length = 88
-known_first_party = ["bamboo"]
-skip_glob = ["protobuf/*", "libfranka/*", "install/*", "build/*"]
-
 [tool.mypy]
 python_version = "3.8"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 exclude = [
-    "protobuf/",
-    "libfranka/",
+    "third_party/",
     "install/",
     "build/",
-    "minimal_joint_impedance/",
-]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = [
-    "--strict-markers",
-    "--strict-config",
-    "--cov=bamboo",
-    "--cov-report=html",
-    "--cov-report=term-missing",
-]
-filterwarnings = [
-    "error",
-    "ignore::UserWarning",
-    "ignore::DeprecationWarning",
-]
-
-[tool.coverage.run]
-source = ["bamboo"]
-omit = [
-    "*/tests/*",
-    "*/protobuf/*",
-    "*/libfranka/*",
-    "*/install/*",
-    "*/build/*",
-]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "if self.debug:",
-    "if settings.DEBUG",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if 0:",
-    "if __name__ == .__main__.:",
-    "class .*\\bProtocol\\):",
-    "@(abc\\.)?abstractmethod",
 ]
