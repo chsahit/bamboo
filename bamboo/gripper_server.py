@@ -16,7 +16,7 @@ from third_party.robotiq_gripper_client import RobotiqGripperClient
 class GripperServer:
     """ZMQ server that controls Robotiq gripper hardware."""
 
-    def __init__(self, gripper_port: str = "/dev/ttyUSB0", zmq_port: int = 5558):
+    def __init__(self, gripper_port: str = "/dev/ttyUSB0", zmq_port: int = 5559):
         """Initialize Gripper Server.
 
         Args:

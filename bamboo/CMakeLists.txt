@@ -31,9 +31,6 @@ find_path(MSGPACK_INCLUDE_DIR msgpack.hpp
     PATH_SUFFIXES msgpack msgpack-cxx
 )
 
-# No protobuf/gRPC code generation needed anymore
-# Proto files kept for reference only
-
 # Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
