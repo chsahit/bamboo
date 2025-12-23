@@ -1,6 +1,7 @@
 #!/bin/bash
 
 SESSION="bamboo"
+eval "$(conda shell.bash hook)"
 
 check_port_health() {
     local port=$1
@@ -31,13 +32,13 @@ start_servers() {
     echo "Creating tmux session with multiple panes..."
 
     # Create new session with first pane for arm control node.
-    tmux new-session -d -s "$SESSION" -n "servers" bash -c "conda activate bamboo && cd bamboo/build/ && ./bamboo_control_node 172.16.0.2 5555; read"
+    tmux new-session -d -s "$SESSION" -n "servers" bash -c "eval \"\$(conda shell.bash hook)\" && conda activate bamboo && cd bamboo/build/ && ./bamboo_control_node 172.16.0.2 5555; read"
 
-    # Split vertically to create gripper pane
-    tmux split-window -v -p 50 -t "$SESSION:0"
+    # Split horizontally to create gripper pane
+    tmux split-window -h -p 50 -t "$SESSION:0"
 
     # Setup the gripper server pane
-    tmux send-keys -t "$SESSION:0.1" "conda activate bamboo" C-m
+    tmux send-keys -t "$SESSION:0.1" "eval \"\$(conda shell.bash hook)\" && conda activate bamboo" C-m
     tmux send-keys -t "$SESSION:0.1" "cd bamboo" C-m
     tmux send-keys -t "$SESSION:0.1" "python gripper_server.py --gripper-port /dev/ttyUSB0 --zmq-port 5559" C-m
 
