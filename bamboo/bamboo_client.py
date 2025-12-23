@@ -2,7 +2,6 @@
 
 """
 Bamboo Client - A client for the bamboo control node.
-Gripper communication uses ZMQ (unchanged).
 """
 
 from __future__ import annotations
@@ -209,13 +208,13 @@ class BambooFrankaClient:
         except Exception as e:
             raise RuntimeError(f"Gripper communication error: {e}")
 
-    def execute_joint_impedance_path(self, joint_confs: list, joint_vels: Optional[list]=None, gripper_isopen: bool=True,
+    def execute_joint_impedance_path(self, joint_confs: np.ndarray, joint_vels: Optional[np.ndarray]=None, gripper_isopen: bool=True,
             durations: Optional[list]=None, default_duration:float=0.5) -> dict:
         """Execute joint impedance trajectory and wait for completion.
 
         Args:
-            joint_confs: List of joint configurations (7 values each)
-            joint_vels: List of joint velocities (7 values each) for each waypoint
+            joint_confs: (n, 7) array of joint configurations
+            joint_vels: (n, 7) array of of joint velocities for each waypoint
             gripper_isopen: Bool or list of bools for gripper state (ignored for now)
             durations: Optional list of durations (in seconds) for each waypoint.
                       If None, all waypoints use default_duration.
@@ -258,8 +257,8 @@ class BambooFrankaClient:
 
                 # Create timed waypoint
                 waypoint = {
-                    "goal_q": list(joint_conf),
-                    "velocity": list(joint_vel) if joint_vel is not None else [],
+                    "goal_q": joint_conf.tolist(),
+                    "velocity": joint_vel.tolist() if joint_vel is not None else [],
                     "duration": waypoint_duration,
                     "kp": [600.0] * 7,  # Default stiffness
                     "kd": [50.0] * 7,   # Default damping
