@@ -80,7 +80,7 @@ status_servers() {
             echo "  ❌ bamboo_control_node (port 5555) - not responding"
         fi
 
-        if lsof -i ":8123" -sTCP:LISTEN -t >/dev/null 2>&1; then
+        if lsof -i ":5559" -sTCP:LISTEN -t >/dev/null 2>&1; then
             echo "  ✅ gripper_server (port 5559) - listening"
         else
             echo "  ❌ gripper_server (port 5559) - not responding"
