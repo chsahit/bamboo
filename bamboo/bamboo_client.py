@@ -208,7 +208,7 @@ class BambooFrankaClient:
         except Exception as e:
             raise RuntimeError(f"Gripper communication error: {e}")
 
-    def execute_joint_impedance_path(self, joint_confs: np.ndarray, joint_vels: Optional[np.ndarray]=None, gripper_isopen: bool=True,
+    def execute_joint_impedance_path(self, joint_confs: np.ndarray, joint_vels: Optional[np.ndarray]=None,
             durations: Optional[list]=None, default_duration:float=0.5) -> dict:
         """Execute joint impedance trajectory and wait for completion.
 
@@ -229,7 +229,7 @@ class BambooFrankaClient:
 
             # Validate joint_vels parameter
             if joint_vels is None:
-                joint_vels = [[0, 0, 0, 0, 0, 0, 0] ] * len(joint_confs)
+                joint_vels = np.array([[0, 0, 0, 0, 0, 0, 0] ] * len(joint_confs))
             if joint_vels is not None and len(joint_vels) != len(joint_confs):
                 raise ValueError(f"joint_vels length ({len(joint_vels)}) must match joint_confs length ({len(joint_confs)})")
 

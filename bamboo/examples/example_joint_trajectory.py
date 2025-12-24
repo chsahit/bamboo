@@ -51,7 +51,7 @@ def main() -> int:
 
 
             print("\nSending trajectory to robot...")
-            result = client.execute_joint_impedance_path(waypoints, durations=durations)
+            result = client.execute_joint_impedance_path(np.array(waypoints), durations=durations)
 
             # Get final joint positions to calculate error
             print("\nGetting final joint angles...")
