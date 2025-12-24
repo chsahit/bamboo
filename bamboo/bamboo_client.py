@@ -7,8 +7,6 @@ Gripper communication uses ZMQ (unchanged).
 
 from __future__ import annotations
 
-import json
-import logging
 import time
 import zmq
 import msgpack
@@ -196,11 +194,11 @@ class BambooFrankaClient:
 
         try:
             # Send command
-            self.gripper_socket.send_string(json.dumps(command))
+            self.gripper_socket.send(msgpack.packb(command))
 
             # Receive response
-            response_str = self.gripper_socket.recv_string()
-            response = json.loads(response_str)
+            response_data = self.gripper_socket.recv()
+            response = msgpack.unpackb(response_data, raw=False)
 
             return response  # type: ignore[no-any-return]
 
