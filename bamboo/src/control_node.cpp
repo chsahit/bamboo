@@ -5,6 +5,7 @@
 #include <cmath>
 #include <csignal>
 #include <exception>
+#include <getopt.h>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -14,6 +15,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <unistd.h>
 #include <vector>
 #include <map>
 
@@ -679,18 +681,47 @@ int main(int argc, char **argv) {
   // Register signal handler for graceful shutdown
   std::signal(SIGINT, signalHandler);
 
-  if (argc != 3) {
-    std::cerr << "Usage: " << argv[0] << " <robot-ip> <port>" << std::endl;
+  std::string robot_ip;
+  std::string port;
+  std::string listen_address = "*";  // default
+
+  int opt;
+  while ((opt = getopt(argc, argv, "r:p:l:h")) != -1) {
+    switch (opt) {
+      case 'r':
+        robot_ip = optarg;
+        break;
+      case 'p':
+        port = optarg;
+        break;
+      case 'l':
+        listen_address = optarg;
+        break;
+      case 'h':
+      case '?':
+      default:
+        std::cerr << "Usage: " << argv[0] << " -r <robot-ip> -p <port> [-l <listen-address>]" << std::endl;
+        std::cerr << "  -r: Robot IP address (required)" << std::endl;
+        std::cerr << "  -p: Port number (required)" << std::endl;
+        std::cerr << "  -l: Listen address (default: * for all interfaces)" << std::endl;
+        std::cerr << "  -h: Show this help" << std::endl;
+        return -1;
+    }
+  }
+
+  // Validate required arguments
+  if (robot_ip.empty() || port.empty()) {
+    std::cerr << "Error: Robot IP and port are required" << std::endl;
+    std::cerr << "Usage: " << argv[0] << " -r <robot-ip> -p <port> [-l <listen-address>]" << std::endl;
     return -1;
   }
 
-  const std::string robot_ip = argv[1];
-  const std::string port = argv[2];
-  const std::string server_address = "tcp://*:" + port;
+  const std::string server_address = "tcp://" + listen_address + ":" + port;
 
   std::cout << "Bamboo Control Node Starting..." << std::endl;
   std::cout << "Robot IP: " << robot_ip << std::endl;
   std::cout << "Port: " << port << std::endl;
+  std::cout << "Listen address: " << listen_address << std::endl;
 
   try {
     // Connect to robot

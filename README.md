@@ -74,20 +74,46 @@ pip install -e .[server]
 ## Usage
 
 ### Server-Side Robot Control
-First, run the C++ control node 
+
+**Security Warning:** By default, the controller listens on all network interfaces (`*`), accepting commands from any IP address that can reach the machine. For security, consider restricting access by setting the 'listen address' 
+
+**Easy Start (Recommended):** Use the provided script to start both control node and gripper server in tmux:
+
+```bash
+bash bamboo.sh
+```
+
+The script supports configuration flags:
+```bash
+bash bamboo.sh start --robot_addr 172.16.0.2 --control_port 5555 --listen_addr "*" --gripper_device /dev/ttyUSB0 --gripper_port 5559
+```
+
+Available options:
+- `--robot_addr`: Robot IP address (default: 172.16.0.2)
+- `--control_port`: Control node port (default: 5555)
+- `--listen_addr`: Listen address (default: * for all interfaces)
+- `--gripper_device`: Gripper device (default: /dev/ttyUSB0)
+- `--gripper_port`: Gripper server port (default: 5559)
+
+Other commands:
+- `bash bamboo.sh status` - Check server status
+- `bash bamboo.sh stop` - Stop all servers
+- `bash bamboo.sh attach` - Attach to tmux session
+
+**Manual Start:** If you need to run servers manually, first run the C++ control node:
 
 ```bash
 conda activate bamboo
 cd bamboo/build
-./bamboo_control_node <robot-ip> <zmq-port>
+./bamboo_control_node -r <robot-ip> -p <port> [-l <listen-address>]
 ```
 
 Example:
 ```bash
-./bamboo_control_node 172.16.0.2 5555
+./bamboo_control_node -r 172.16.0.2 -p 5555 -l "*"
 ```
 
-Then in a new terminal, launch the gripper server
+Then in a new terminal, launch the gripper server:
 ```bash
 conda activate bamboo
 cd bamboo
@@ -98,7 +124,8 @@ Example:
 ```bash
 python3 gripper_server.py --gripper-port /dev/ttyUSB0 --zmq-port 5559
 ```
-You may have to add the user to the `dialout` and `tty` groups to read from the robotiq grippers if this hasn't been done already. It can be done with 
+
+You may have to add the user to the `dialout` and `tty` groups to read from the robotiq grippers if this hasn't been done already:
 ```bash
 sudo usermod -a -G dialout $USER
 sudo usermod -a -G tty $USER

@@ -2,10 +2,7 @@
 
 ## Sahit
 
-- [ ] controller should fail if any of the joints hit a joint limit
-- [ ] Bash script for starting controller and gripper in tmux session
-- [ ] tag a v1.0.0 on github
-- [ ] add authentication (lower priority, just add note in README)
+- [ ] tag a v1.0.0 on github (after this PR is merged in)
 
 ## Will
  
@@ -15,12 +12,13 @@
 - [ ] update README with latest install instructions, pinnochio stuff too
 - [ ] pyproject.toml: I feel pre-commit can go inside dev dependencies. Also like project urls are off. Are we using black or ruff too?
 
-## Not important for now
- 
-- [ ] Seems like gripper still uses JSON instead of msgpack
 
 ## Done
 
+- [x] Seems like gripper still uses JSON instead of msgpack
+- [x] add authentication (lower priority, just add note in README)
+- [x] Bash script for starting controller and gripper in tmux session 
+- [x] controller should fail if any of the joints hit a joint limit (#12)
 - [x] Fix example scripts to do package level imports
 - [x] Can/should we merge InstallBamboo and InstallPackage?
 - [x] InstallBamboo: if conda environment already exists then should warn (to avoid overwrite or breaking people's envs)
