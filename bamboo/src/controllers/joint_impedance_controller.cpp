@@ -27,11 +27,27 @@ void JointImpedanceController::SetGains(const std::array<double, 7> &kp,
   Kd_ = Eigen::Map<const Eigen::Matrix<double, 7, 1>>(kd.data());
 }
 
-std::array<double, 7>
+ControllerResult
 JointImpedanceController::Step(const franka::RobotState &robot_state,
                                const Eigen::Matrix<double, 7, 1> &desired_q,
                                const Eigen::Matrix<double, 7, 1> &desired_dq,
                                const Eigen::Matrix<double, 7, 1> &desired_ddq) {
+
+  // Check for joint position limit violations
+  bool joint_position_limit_violated = false;
+  for (int i = 0; i < 7; i++) {
+    if (desired_q[i] > joint_max_[i]) {
+      std::cout << "[JOINT_POSITION_LIMIT] Joint " << i
+                << " desired position exceeds upper limit: " << desired_q[i]
+                << " > " << joint_max_[i] << " rad" << std::endl;
+      joint_position_limit_violated = true;
+    } else if (desired_q[i] < joint_min_[i]) {
+      std::cout << "[JOINT_POSITION_LIMIT] Joint " << i
+                << " desired position exceeds lower limit: " << desired_q[i]
+                << " < " << joint_min_[i] << " rad" << std::endl;
+      joint_position_limit_violated = true;
+    }
+  }
 
   // Get dynamics from Franka model and copy to Eigen objects
   const std::array<double, 49> mass_array = model_->mass(robot_state);
@@ -70,25 +86,28 @@ JointImpedanceController::Step(const franka::RobotState &robot_state,
                                       Kd_.cwiseProduct(joint_vel_error) +
                                       M * desired_ddq + coriolis;
 
-  // Apply torque limits
+  // Apply torque limits and track violations
+  bool torque_limit_violated = false;
   for (int i = 0; i < 7; i++) {
     if (tau_d[i] > joint_tau_limits_[i]) {
       std::cout << "[TORQUE_LIMIT] Joint " << i
                 << " hit upper limit: " << tau_d[i] << " -> "
                 << joint_tau_limits_[i] << " Nm" << std::endl;
       tau_d[i] = joint_tau_limits_[i];
+      torque_limit_violated = true;
     } else if (tau_d[i] < -joint_tau_limits_[i]) {
       std::cout << "[TORQUE_LIMIT] Joint " << i
                 << " hit lower limit: " << tau_d[i] << " -> "
                 << -joint_tau_limits_[i] << " Nm" << std::endl;
       tau_d[i] = -joint_tau_limits_[i];
+      torque_limit_violated = true;
     }
   }
 
   std::array<double, 7> tau_d_array;
   Eigen::VectorXd::Map(&tau_d_array[0], 7) = tau_d;
 
-  return tau_d_array;
+  return ControllerResult{tau_d_array, joint_position_limit_violated, torque_limit_violated};
 }
 
 } // namespace controllers

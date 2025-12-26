@@ -11,17 +11,24 @@
 namespace bamboo {
 namespace controllers {
 
+struct ControllerResult {
+  std::array<double, 7> torques;
+  bool joint_position_limit_violated;
+  bool torque_limit_violated;
+};
+
 class JointImpedanceController {
 public:
   JointImpedanceController(franka::Model *model);
 
   // Compute torque command given current state and desired joint position
-  std::array<double, 7> Step(const franka::RobotState &robot_state,
-                             const Eigen::Matrix<double, 7, 1> &desired_q,
-                             const Eigen::Matrix<double, 7, 1> &desired_dq =
-                                 Eigen::Matrix<double, 7, 1>::Zero(),
-                             const Eigen::Matrix<double, 7, 1> &desired_ddq =
-                                 Eigen::Matrix<double, 7, 1>::Zero());
+  // Returns torques and a boolean indicating if any joint limit was violated
+  ControllerResult Step(const franka::RobotState &robot_state,
+                        const Eigen::Matrix<double, 7, 1> &desired_q,
+                        const Eigen::Matrix<double, 7, 1> &desired_dq =
+                            Eigen::Matrix<double, 7, 1>::Zero(),
+                        const Eigen::Matrix<double, 7, 1> &desired_ddq =
+                            Eigen::Matrix<double, 7, 1>::Zero());
 
   // Set controller gains (optional - uses defaults if not called)
   void SetGains(const std::array<double, 7> &kp,
