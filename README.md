@@ -80,12 +80,12 @@ pip install -e .[server]
 **Easy Start (Recommended):** Use the provided script to start both control node and gripper server in tmux:
 
 ```bash
-bash bamboo.sh
+bash RunBambooController
 ```
 
 The script supports configuration flags:
 ```bash
-bash bamboo.sh start --robot_addr 172.16.0.2 --control_port 5555 --listen_addr "*" --gripper_device /dev/ttyUSB0 --gripper_port 5559
+bash RunBambooController start --robot_addr 172.16.0.2 --control_port 5555 --listen_addr "*" --gripper_device /dev/ttyUSB0 --gripper_port 5559
 ```
 
 Available options:
@@ -96,9 +96,9 @@ Available options:
 - `--gripper_port`: Gripper server port (default: 5559)
 
 Other commands:
-- `bash bamboo.sh status` - Check server status
-- `bash bamboo.sh stop` - Stop all servers
-- `bash bamboo.sh attach` - Attach to tmux session
+- `bash RunBambooController status` - Check server status
+- `bash RunBambooController stop` - Stop all servers
+- `bash RunBambooController attach` - Attach to tmux session
 
 **Manual Start:** If you need to run servers manually, first run the C++ control node:
 

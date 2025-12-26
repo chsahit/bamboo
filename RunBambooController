@@ -91,25 +91,6 @@ if [[ -z "$COMMAND" ]]; then
   fi
 fi
 
-check_port_health() {
-    local port=$1
-    local max_wait=30
-    local waited=0
-
-    echo "  Waiting for port $port..."
-    while [ $waited -lt $max_wait ]; do
-        if lsof -i ":$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
-            echo "  ✅ Port $port is listening"
-            return 0
-        fi
-        sleep 1
-        waited=$((waited + 1))
-    done
-
-    echo "  ❌ Port $port didn't start within ${max_wait}s"
-    return 1
-}
-
 
 start_servers() {
     # Check if session already exists
