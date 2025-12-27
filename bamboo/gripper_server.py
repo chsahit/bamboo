@@ -5,10 +5,10 @@ Gripper Server - Controls Robotiq gripper hardware via ZMQ messages.
 This runs on the robot computer and receives commands from remote BambooFrankaClients.
 """
 
-import json
 import logging
 import time
 import zmq
+import msgpack
 import argparse
 from third_party.robotiq_gripper_client import RobotiqGripperClient
 
@@ -104,20 +104,20 @@ class GripperServer:
             while self.running:
                 # Wait for request (with timeout)
                 try:
-                    message = self.socket.recv_string(zmq.NOBLOCK)
+                    message = self.socket.recv(zmq.NOBLOCK)
                     print("MESSAGE RECEIVED")
 
                     # Parse command
                     try:
-                        command = json.loads(message)
-                    except json.JSONDecodeError:
-                        response = {"success": False, "error": "Invalid JSON"}
+                        command = msgpack.unpackb(message, raw=False)
+                    except (msgpack.exceptions.ExtraData, msgpack.exceptions.UnpackException):
+                        response = {"success": False, "error": "Invalid msgpack"}
                     else:
                         print(f"{command=}")
                         response = self.handle_command(command)
 
                     # Send response
-                    self.socket.send_string(json.dumps(response))
+                    self.socket.send(msgpack.packb(response))
 
                 except zmq.Again:
                     # No message received, continue
