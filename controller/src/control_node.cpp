@@ -78,7 +78,7 @@ private:
   Eigen::Matrix<double, 7, 1> q_goal_;
 
   // For acceleration computation via finite differencing
-  Eigen::Matrix<double, 7, 1> v_cmd_prev_;
+  Eigen::Matrix<double, 7, 1> velocity_cmd_prev_;
   Eigen::Matrix<double, 7, 1> a_cmd_latest_;
 
   // Low-pass filter frequency for acceleration
@@ -98,7 +98,7 @@ public:
     q_goal_ = q_current_;
 
     // Initialize velocity and acceleration tracking
-    v_cmd_prev_.setZero();
+    velocity_cmd_prev_.setZero();
     a_cmd_latest_.setZero();
 
     std::cout << "Initial joint positions: " << q_current_.transpose()
@@ -238,7 +238,7 @@ private:
     double control_time = 0.0;
 
     // Reset velocity and acceleration tracking for new trajectory
-    v_cmd_prev_.setZero();
+    velocity_cmd_prev_.setZero();
     a_cmd_latest_.setZero();
 
     // Current waypoint tracking
@@ -258,13 +258,13 @@ private:
 
     // Initialize first waypoint
     q_goal_ = goals[0];
-    Eigen::Matrix<double, 7, 1> vel_start =
+    Eigen::Matrix<double, 7, 1> velocity_start =
         Eigen::Matrix<double, 7, 1>::Zero();
-    Eigen::Matrix<double, 7, 1> vel_goal =
+    Eigen::Matrix<double, 7, 1> velocity_goal =
         velocities.empty() ? Eigen::Matrix<double, 7, 1>::Zero()
                            : velocities[0];
-    interpolator_->Reset(control_time, q_current_, q_goal_, vel_start,
-                         vel_goal, traj_rate_, durations[0]);
+    interpolator_->Reset(control_time, q_current_, q_goal_, velocity_start,
+                         velocity_goal, traj_rate_, durations[0]);
 
     std::cout << "[CONTROL] Starting trajectory with " << goals.size()
               << " waypoints" << std::endl;
@@ -350,17 +350,17 @@ private:
             // Setup next waypoint
             waypoint_start_time = control_time;
             q_goal_ = goals[current_waypoint];
-            Eigen::Matrix<double, 7, 1> vel_prev =
+            Eigen::Matrix<double, 7, 1> velocity_prev =
                 (current_waypoint > 0 &&
                  current_waypoint - 1 < velocities.size())
                     ? velocities[current_waypoint - 1]
                     : Eigen::Matrix<double, 7, 1>::Zero();
-            Eigen::Matrix<double, 7, 1> vel_curr =
+            Eigen::Matrix<double, 7, 1> velocity_curr =
                 (current_waypoint < velocities.size())
                     ? velocities[current_waypoint]
                     : Eigen::Matrix<double, 7, 1>::Zero();
             interpolator_->Reset(control_time, q_current_, q_goal_,
-                                 vel_prev, vel_curr, traj_rate_,
+                                 velocity_prev, velocity_curr, traj_rate_,
                                  durations[current_waypoint]);
           }
         }
@@ -376,7 +376,7 @@ private:
         if (dt > 0.0) {
           // Compute raw acceleration from velocity difference
           Eigen::Matrix<double, 7, 1> a_cmd_raw =
-              (dq_desired - v_cmd_prev_) / dt;
+              (dq_desired - velocity_cmd_prev_) / dt;
 
           // Apply low-pass filter
           for (int i = 0; i < 7; ++i) {
@@ -386,7 +386,7 @@ private:
           ddq_desired = a_cmd_latest_;
 
           // Update previous velocity for next iteration
-          v_cmd_prev_ = dq_desired;
+          velocity_cmd_prev_ = dq_desired;
         }
 
         // Compute control torques
