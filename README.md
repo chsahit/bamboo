@@ -42,7 +42,7 @@ pip install -e .[server]
 
 ### Compile Controller
 ```bash
-mkdir bamboo/build && cd bamboo/build
+mkdir controller/build && cd controller/build
 cmake ..
 make
 ```
@@ -74,11 +74,11 @@ pip install -e .[server]
 ## Usage
 
 ### Server-Side Robot Control
-First, run the C++ control node 
+First, run the C++ control node
 
 ```bash
 conda activate bamboo
-cd bamboo/build
+cd controller/build
 ./bamboo_control_node <robot-ip> <zmq-port>
 ```
 
@@ -90,7 +90,7 @@ Example:
 Then in a new terminal, launch the gripper server
 ```bash
 conda activate bamboo
-cd bamboo
+cd controller
 python3 gripper_server.py --gripper-port <gripper-device> --zmq-port <zmq-port>
 ```
 
@@ -109,14 +109,12 @@ You can verify the install by running some of the example scripts in a new termi
 To actuate the robot and print out its joint angles (*WARNING: THIS SCRIPT MOVES THE ROBOT WITHOUT DOING COLLISION CHECKING SO MAKE SURE THE NEARBY WORKSPACE IS CLEAR*):
 ```bash
 conda activate bamboo
-cd bamboo/examples
-python joint_trajectory.py
+python -m bamboo.examples.joint_trajectory
 ```
 To open and close the gripper and print the width of the fingers:
 ```bash
 conda activate bamboo
-cd bamboo/examples
-python gripper.py
+python -m bamboo.examples.gripper
 ```
 
 ## Development Setup

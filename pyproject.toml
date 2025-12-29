@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "bamboo-franka-controller"
 version = "0.1.0"
-description = "Bamboo Franka Robot Controller with Joint Impedance Control"
+description = "Bamboo Franka Robot Control with Joint Impedance Control"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
@@ -55,11 +55,8 @@ package-dir = {"" = "."}
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["bamboo*"]
-exclude = ["tests*", "docs*", "install*", "build*"]
+exclude = ["controller"]
 
-[tool.setuptools.package-data]
-"bamboo.examples" = ["*.proto", "*.py"]
-"bamboo.proto" = ["*.proto"]
 
 # Development tool configurations
 [tool.ruff]

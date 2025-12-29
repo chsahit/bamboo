@@ -169,7 +169,7 @@ conda activate "$env_name"
 run_quiet "bamboo: installing Python package with server dependencies" pip install -e "$SCRIPT_DIR[server]"
 
 # Deal with the C++ build
-BUILD_DIR="$SCRIPT_DIR/bamboo/build"
+BUILD_DIR="$SCRIPT_DIR/controller/build"
 if [ ! -d "$BUILD_DIR" ]; then
     echo "Creating build directory: $BUILD_DIR"
     mkdir -p "$BUILD_DIR"

@@ -12,7 +12,7 @@ import argparse
 
 import numpy as np
 
-from bamboo.bamboo_client import BambooFrankaClient
+from bamboo import BambooFrankaClient
 
 
 def main() -> None:
