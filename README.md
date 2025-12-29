@@ -119,10 +119,57 @@ cd bamboo/examples
 python gripper.py
 ```
 
-## Contributing 
-For the python code we enforce style with `ruff` and typechecking with `mypy`. For the C++ code, we enforce style with `clang-tidy`. You can run all linting and checking steps with `pre-commit run --all-files`, they also will run automatically when you make a commit. 
+## Development Setup
 
-To contribute, please create a fork of the repository, make a feature branch based on main, and commit your changes there. Then open a pull request from that branch.
+If you plan to contribute to Bamboo, you'll need to set up the development tools.
+
+### Install Development Dependencies
+
+Install the development dependencies including pre-commit, ruff, and mypy:
+
+```bash
+pip install -e .[dev]
+```
+
+### Set Up Pre-Commit Hooks
+
+Install the pre-commit hooks to automatically run linting and formatting checks before each commit:
+
+```bash
+pre-commit install
+```
+
+Now, whenever you commit code, pre-commit will automatically:
+- Format Python code with ruff
+- Check Python code style with ruff
+
+### Run Pre-Commit Manually
+
+To run all pre-commit hooks on all files without making a commit:
+
+```bash
+pre-commit run --all-files
+```
+
+To run pre-commit on specific files:
+
+```bash
+pre-commit run --files path/to/file.py
+```
+
+## Contributing
+
+For Python code, we enforce style with `ruff` and type checking with `mypy`. For C++ code, we enforce style with `clang-tidy`.
+
+Pre-commit hooks will automatically run linting and formatting checks when you make a commit. You can also run them manually with `pre-commit run --all-files`.
+
+To contribute:
+1. Fork the repository
+2. Create a feature branch based on `main`
+3. Install development dependencies: `pip install -e .[dev]`
+4. Set up pre-commit hooks: `pre-commit install`
+5. Make your changes and commit them
+6. Open a pull request from your feature branch
 
 ## Acknowledgements
 

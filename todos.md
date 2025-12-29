@@ -17,7 +17,7 @@
 
 ## Not important for now
  
-- [ ] Seems like gripper still uses JSON instead of msgpack
+- [x] Seems like gripper still uses JSON instead of msgpack (Sahit did on another PR)
 
 ## Done
 

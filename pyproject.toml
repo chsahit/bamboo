@@ -39,6 +39,12 @@ server = [
     "pyserial>=3.4",
     "pymodbus==2.5.3",
 ]
+dev = [
+    # Development tools
+    "pre-commit>=3.0.0",
+    "ruff>=0.6.0",
+    "mypy>=1.0.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/chsahit/bamboo"
