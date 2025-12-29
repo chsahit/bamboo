@@ -28,12 +28,9 @@ classifiers = [
 ]
 requires-python = ">=3.8"
 dependencies = [
-    # Core scientific computing
+    "msgpack",
     "numpy>=1.20.0",
     "pyzmq>=22.0.0",
-
-    # Serialization
-    "msgpack",
 ]
 
 [project.optional-dependencies]
@@ -59,6 +56,32 @@ exclude = ["tests*", "docs*", "install*", "build*"]
 "bamboo.proto" = ["*.proto"]
 
 # Development tool configurations
+[tool.ruff]
+line-length = 120
+target-version = "py38"
+exclude = [
+    "third_party/",
+    "install/",
+    "build/",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+]
+ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["bamboo"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
 [tool.mypy]
 python_version = "3.8"
 warn_return_any = true

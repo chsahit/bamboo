@@ -23,7 +23,7 @@ Make sure that the user is in the realtime group with `sudo usermod -a -G realti
 
 You do not need to install `libfranka` yourself — the included `InstallBambooController` script will clone, build, and set up libfranka.
 
-### Build C++ Dependencies
+### Build Controller
 ```bash
 bash InstallBambooController
 ```
@@ -105,18 +105,18 @@ sudo usermod -a -G tty $USER
 ```
 
 ### Client-Side Interface with robot and gripper
-You can verify the install by running some of the example scripts in a new terminal. 
+You can verify the install by running some of the example scripts in a new terminal.
 To actuate the robot and print out its joint angles (*WARNING: THIS SCRIPT MOVES THE ROBOT WITHOUT DOING COLLISION CHECKING SO MAKE SURE THE NEARBY WORKSPACE IS CLEAR*):
 ```bash
 conda activate bamboo
 cd bamboo/examples
-python example_joint_trajectory.py
+python joint_trajectory.py
 ```
-To open and glose the gripper and print the width of the fingers:
+To open and close the gripper and print the width of the fingers:
 ```bash
 conda activate bamboo
 cd bamboo/examples
-python simple_gripper_example.py
+python gripper.py
 ```
 
 ## Contributing 
