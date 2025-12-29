@@ -72,4 +72,4 @@ ehthumbs.db
 Thumbs.db
 
 # libfranka
-third_party/libfranka/
+controller/third_party/libfranka/

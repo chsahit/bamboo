@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-
-"""
-Bamboo Client - A client for the bamboo control node.
-Gripper communication uses ZMQ (unchanged).
-"""
-
 from __future__ import annotations
 
 import json
