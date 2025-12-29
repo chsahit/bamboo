@@ -29,9 +29,9 @@ void JointImpedanceController::SetGains(const std::array<double, 7> &kp,
 
 std::array<double, 7>
 JointImpedanceController::Step(const franka::RobotState &robot_state,
-                               const Eigen::Matrix<double, 7, 1> &desired_q,
-                               const Eigen::Matrix<double, 7, 1> &desired_dq,
-                               const Eigen::Matrix<double, 7, 1> &desired_ddq) {
+                               const Eigen::Matrix<double, 7, 1> &q_desired,
+                               const Eigen::Matrix<double, 7, 1> &dq_desired,
+                               const Eigen::Matrix<double, 7, 1> &ddq_desired) {
 
   // Get dynamics from Franka model and copy to Eigen objects
   const std::array<double, 49> mass_array = model_->mass(robot_state);
@@ -46,7 +46,7 @@ JointImpedanceController::Step(const franka::RobotState &robot_state,
   Eigen::Matrix<double, 7, 1> dq =
       Eigen::VectorXd::Map(robot_state.dq.data(), 7);
 
-  Eigen::Matrix<double, 7, 1> current_q, current_dq;
+  Eigen::Matrix<double, 7, 1> q_current, dq_current;
 
   if (first_state_) {
     smoothed_q_ = q;
@@ -57,18 +57,18 @@ JointImpedanceController::Step(const franka::RobotState &robot_state,
     smoothed_dq_ = alpha_dq_ * dq + (1.0 - alpha_dq_) * smoothed_dq_;
   }
 
-  current_q = smoothed_q_;
-  current_dq = smoothed_dq_;
+  q_current = smoothed_q_;
+  dq_current = smoothed_dq_;
 
-  Eigen::Matrix<double, 7, 1> joint_pos_error = desired_q - current_q;
-  Eigen::Matrix<double, 7, 1> joint_vel_error = desired_dq - current_dq;
+  Eigen::Matrix<double, 7, 1> joint_pos_error = q_desired - q_current;
+  Eigen::Matrix<double, 7, 1> joint_vel_error = dq_desired - dq_current;
 
   // tau = -Kp * (q-q_cmd) - Kd * (dq-dq_cmd) + M*a_cmd + coriolis
   // NOTE: Franka already does automatic gravity compensation,
   // so we don't add it here
   Eigen::Matrix<double, 7, 1> tau_d = Kp_.cwiseProduct(joint_pos_error) +
                                       Kd_.cwiseProduct(joint_vel_error) +
-                                      M * desired_ddq + coriolis;
+                                      M * ddq_desired + coriolis;
 
   // Apply torque limits
   for (int i = 0; i < 7; i++) {

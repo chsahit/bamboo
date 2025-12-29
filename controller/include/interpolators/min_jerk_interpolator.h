@@ -15,13 +15,13 @@ private:
 
   Vector7d q_start_;
   Vector7d q_goal_;
-  Vector7d v_start_;
-  Vector7d v_goal_;
+  Vector7d vel_start_;
+  Vector7d vel_goal_;
 
   Vector7d last_q_t_;
-  Vector7d last_v_t_;
+  Vector7d last_vel_t_;
   Vector7d prev_q_goal_;
-  Vector7d prev_v_goal_;
+  Vector7d prev_vel_goal_;
 
   double dt_;
   double last_time_;
@@ -42,15 +42,15 @@ public:
                     const Eigen::Matrix<double, 7, 1> &q_start,
                     const Eigen::Matrix<double, 7, 1> &q_goal, const int &rate,
                     const double &max_time) {
-    Vector7d v_zero = Vector7d::Zero();
-    Reset(time_sec, q_start, q_goal, v_zero, v_zero, rate, max_time);
+    Vector7d vel_zero = Vector7d::Zero();
+    Reset(time_sec, q_start, q_goal, vel_zero, vel_zero, rate, max_time);
   };
 
   inline void Reset(const double &time_sec,
                     const Eigen::Matrix<double, 7, 1> &q_start,
                     const Eigen::Matrix<double, 7, 1> &q_goal,
-                    const Eigen::Matrix<double, 7, 1> &v_start,
-                    const Eigen::Matrix<double, 7, 1> &v_goal, const int &rate,
+                    const Eigen::Matrix<double, 7, 1> &vel_start,
+                    const Eigen::Matrix<double, 7, 1> &vel_goal, const int &rate,
                     const double &max_time) {
     dt_ = 1. / static_cast<double>(rate);
     last_time_ = time_sec;
@@ -61,31 +61,31 @@ public:
 
     if (first_goal_) {
       q_start_ = q_start;
-      v_start_ = v_start;
+      vel_start_ = vel_start;
       prev_q_goal_ = q_start;
-      prev_v_goal_ = v_start;
+      prev_vel_goal_ = vel_start;
       first_goal_ = false;
     } else {
       prev_q_goal_ = q_goal_;
-      prev_v_goal_ = v_goal_;
+      prev_vel_goal_ = vel_goal_;
       q_start_ = prev_q_goal_;
-      v_start_ = prev_v_goal_;
+      vel_start_ = prev_vel_goal_;
     }
     q_goal_ = q_goal;
-    v_goal_ = v_goal;
+    vel_goal_ = vel_goal;
   };
 
   inline void GetNextStep(const double &time_sec, Vector7d &q_t) {
-    Vector7d v_t;
-    GetNextStep(time_sec, q_t, v_t);
+    Vector7d vel_t;
+    GetNextStep(time_sec, q_t, vel_t);
   };
 
   inline void GetNextStep(const double &time_sec, Vector7d &q_t,
-                          Vector7d &v_t) {
+                          Vector7d &vel_t) {
     if (!start_) {
       start_time_ = time_sec;
       last_q_t_ = q_start_;
-      last_v_t_ = v_start_;
+      last_vel_t_ = vel_start_;
       start_ = true;
     }
 
@@ -100,11 +100,11 @@ public:
       }
 
       last_q_t_ = q_start_ + transformed_t * (q_goal_ - q_start_);
-      last_v_t_ = v_start_ + transformed_t * (v_goal_ - v_start_);
+      last_vel_t_ = vel_start_ + transformed_t * (vel_goal_ - vel_start_);
       last_time_ = time_sec;
     }
     q_t = last_q_t_;
-    v_t = last_v_t_;
+    vel_t = last_vel_t_;
   };
 };
 

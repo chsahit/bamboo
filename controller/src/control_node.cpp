@@ -74,8 +74,8 @@ private:
   const double max_time = 1.0;
   const bool log_err_ = true;
 
-  Eigen::Matrix<double, 7, 1> current_q_;
-  Eigen::Matrix<double, 7, 1> goal_q_;
+  Eigen::Matrix<double, 7, 1> q_current_;
+  Eigen::Matrix<double, 7, 1> q_goal_;
 
   // For acceleration computation via finite differencing
   Eigen::Matrix<double, 7, 1> v_cmd_prev_;
@@ -94,14 +94,14 @@ public:
 
     // Get initial robot state
     franka::RobotState init_state = robot_->readOnce();
-    current_q_ = Eigen::VectorXd::Map(init_state.q.data(), 7);
-    goal_q_ = current_q_;
+    q_current_ = Eigen::VectorXd::Map(init_state.q.data(), 7);
+    q_goal_ = q_current_;
 
     // Initialize velocity and acceleration tracking
     v_cmd_prev_.setZero();
     a_cmd_latest_.setZero();
 
-    std::cout << "Initial joint positions: " << current_q_.transpose()
+    std::cout << "Initial joint positions: " << q_current_.transpose()
               << std::endl;
   }
 
@@ -257,14 +257,14 @@ private:
     double final_ee_orientation_error_rad = 0.0;
 
     // Initialize first waypoint
-    goal_q_ = goals[0];
-    Eigen::Matrix<double, 7, 1> start_velocity =
+    q_goal_ = goals[0];
+    Eigen::Matrix<double, 7, 1> vel_start =
         Eigen::Matrix<double, 7, 1>::Zero();
-    Eigen::Matrix<double, 7, 1> goal_velocity =
+    Eigen::Matrix<double, 7, 1> vel_goal =
         velocities.empty() ? Eigen::Matrix<double, 7, 1>::Zero()
                            : velocities[0];
-    interpolator_->Reset(control_time, current_q_, goal_q_, start_velocity,
-                         goal_velocity, traj_rate_, durations[0]);
+    interpolator_->Reset(control_time, q_current_, q_goal_, vel_start,
+                         vel_goal, traj_rate_, durations[0]);
 
     std::cout << "[CONTROL] Starting trajectory with " << goals.size()
               << " waypoints" << std::endl;
@@ -280,14 +280,14 @@ private:
         control_time += dt;
 
         // Update current position
-        current_q_ = Eigen::VectorXd::Map(robot_state.q.data(), 7);
+        q_current_ = Eigen::VectorXd::Map(robot_state.q.data(), 7);
 
         // Check if current waypoint is complete
         double waypoint_elapsed = control_time - waypoint_start_time;
         if (waypoint_elapsed >= durations[current_waypoint]) {
           if (log_err_) {
             // Log joint error for waypoint that timed out
-            Eigen::Matrix<double, 7, 1> waypoint_error = goal_q_ - current_q_;
+            Eigen::Matrix<double, 7, 1> waypoint_error = q_goal_ - q_current_;
             double waypoint_final_error_rad = waypoint_error.cwiseAbs().sum();
             // Update max error across all waypoints
             if (waypoint_final_error_rad > max_joint_error_rad) {
@@ -296,12 +296,12 @@ private:
 
             // Calculate end-effector position and orientation errors for
             // completed waypoint Get desired EE pose from goal joint angles
-            std::array<double, 7> goal_q_array;
-            Eigen::VectorXd::Map(&goal_q_array[0], 7) = goal_q_;
+            std::array<double, 7> q_goal_array;
+            Eigen::VectorXd::Map(&q_goal_array[0], 7) = q_goal_;
 
             // Create a temporary robot state with goal joint positions
             franka::RobotState temp_state = robot_state;
-            temp_state.q = goal_q_array;
+            temp_state.q = q_goal_array;
 
             std::array<double, 16> desired_ee_pose_array =
                 model_->pose(franka::Frame::kEndEffector, temp_state);
@@ -349,49 +349,49 @@ private:
           } else {
             // Setup next waypoint
             waypoint_start_time = control_time;
-            goal_q_ = goals[current_waypoint];
-            Eigen::Matrix<double, 7, 1> prev_velocity =
+            q_goal_ = goals[current_waypoint];
+            Eigen::Matrix<double, 7, 1> vel_prev =
                 (current_waypoint > 0 &&
                  current_waypoint - 1 < velocities.size())
                     ? velocities[current_waypoint - 1]
                     : Eigen::Matrix<double, 7, 1>::Zero();
-            Eigen::Matrix<double, 7, 1> curr_velocity =
+            Eigen::Matrix<double, 7, 1> vel_curr =
                 (current_waypoint < velocities.size())
                     ? velocities[current_waypoint]
                     : Eigen::Matrix<double, 7, 1>::Zero();
-            interpolator_->Reset(control_time, current_q_, goal_q_,
-                                 prev_velocity, curr_velocity, traj_rate_,
+            interpolator_->Reset(control_time, q_current_, q_goal_,
+                                 vel_prev, vel_curr, traj_rate_,
                                  durations[current_waypoint]);
           }
         }
 
         // Get interpolated desired position and velocity for current waypoint
-        Eigen::Matrix<double, 7, 1> desired_q;
-        Eigen::Matrix<double, 7, 1> desired_dq;
-        interpolator_->GetNextStep(control_time, desired_q, desired_dq);
+        Eigen::Matrix<double, 7, 1> q_desired;
+        Eigen::Matrix<double, 7, 1> dq_desired;
+        interpolator_->GetNextStep(control_time, q_desired, dq_desired);
 
         // Compute desired acceleration via finite differencing
-        Eigen::Matrix<double, 7, 1> desired_ddq =
+        Eigen::Matrix<double, 7, 1> ddq_desired =
             Eigen::Matrix<double, 7, 1>::Zero();
         if (dt > 0.0) {
           // Compute raw acceleration from velocity difference
           Eigen::Matrix<double, 7, 1> a_cmd_raw =
-              (desired_dq - v_cmd_prev_) / dt;
+              (dq_desired - v_cmd_prev_) / dt;
 
           // Apply low-pass filter
           for (int i = 0; i < 7; ++i) {
             a_cmd_latest_[i] = franka::lowpassFilter(
                 dt, a_cmd_raw[i], a_cmd_latest_[i], diff_low_pass_freq_);
           }
-          desired_ddq = a_cmd_latest_;
+          ddq_desired = a_cmd_latest_;
 
           // Update previous velocity for next iteration
-          v_cmd_prev_ = desired_dq;
+          v_cmd_prev_ = dq_desired;
         }
 
         // Compute control torques
         std::array<double, 7> tau_d =
-            controller_->Step(robot_state, desired_q, desired_dq, desired_ddq);
+            controller_->Step(robot_state, q_desired, dq_desired, ddq_desired);
 
         // Apply rate limiting
         std::array<double, 7> tau_d_rate_limited = franka::limitRate(
@@ -400,9 +400,9 @@ private:
         // Check if all waypoints completed and robot has stopped
         if (current_waypoint >= goals.size() - 1 &&
             waypoint_elapsed >= durations[current_waypoint]) {
-          Eigen::VectorXd current_dq =
+          Eigen::VectorXd dq_current =
               Eigen::VectorXd::Map(robot_state.dq.data(), 7);
-          double velocity_norm = current_dq.norm();
+          double velocity_norm = dq_current.norm();
 
           if (velocity_norm <
               0.01) { // Robot has stopped (threshold: 0.01 rad/s)
