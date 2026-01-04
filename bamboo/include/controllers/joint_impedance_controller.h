@@ -13,7 +13,6 @@ namespace controllers {
 
 struct ControllerResult {
   std::array<double, 7> torques;
-  bool joint_position_limit_violated;
   bool torque_limit_violated;
 };
 
@@ -40,10 +39,6 @@ private:
   // Controller gains
   Eigen::Matrix<double, 7, 1> Kp_;
   Eigen::Matrix<double, 7, 1> Kd_;
-
-  // Joint limits
-  Eigen::Matrix<double, 7, 1> joint_max_;
-  Eigen::Matrix<double, 7, 1> joint_min_;
 
   // Torque limits per joint
   Eigen::Matrix<double, 7, 1> joint_tau_limits_;

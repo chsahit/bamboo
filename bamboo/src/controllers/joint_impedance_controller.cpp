@@ -12,9 +12,6 @@ JointImpedanceController::JointImpedanceController(franka::Model *model)
   Kp_ << 875.0, 1050.0, 1050.0, 875.0, 175.0, 350.0, 87.5;
   Kd_ << 37.5, 50.0, 37.5, 25.0, 5.0, 3.75, 2.5;
 
-  joint_max_ << 2.8978, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973;
-  joint_min_ << -2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973;
-
   joint_tau_limits_ << 60.0, 60.0, 60.0, 60.0, 30.0, 15.0, 15.0;
 
   smoothed_q_.setZero();
@@ -32,22 +29,6 @@ JointImpedanceController::Step(const franka::RobotState &robot_state,
                                const Eigen::Matrix<double, 7, 1> &desired_q,
                                const Eigen::Matrix<double, 7, 1> &desired_dq,
                                const Eigen::Matrix<double, 7, 1> &desired_ddq) {
-
-  // Check for joint position limit violations
-  bool joint_position_limit_violated = false;
-  for (int i = 0; i < 7; i++) {
-    if (desired_q[i] > joint_max_[i]) {
-      std::cout << "[JOINT_POSITION_LIMIT] Joint " << i
-                << " desired position exceeds upper limit: " << desired_q[i]
-                << " > " << joint_max_[i] << " rad" << std::endl;
-      joint_position_limit_violated = true;
-    } else if (desired_q[i] < joint_min_[i]) {
-      std::cout << "[JOINT_POSITION_LIMIT] Joint " << i
-                << " desired position exceeds lower limit: " << desired_q[i]
-                << " < " << joint_min_[i] << " rad" << std::endl;
-      joint_position_limit_violated = true;
-    }
-  }
 
   // Get dynamics from Franka model and copy to Eigen objects
   const std::array<double, 49> mass_array = model_->mass(robot_state);
@@ -107,7 +88,7 @@ JointImpedanceController::Step(const franka::RobotState &robot_state,
   std::array<double, 7> tau_d_array;
   Eigen::VectorXd::Map(&tau_d_array[0], 7) = tau_d;
 
-  return ControllerResult{tau_d_array, joint_position_limit_violated, torque_limit_violated};
+  return ControllerResult{tau_d_array, torque_limit_violated};
 }
 
 } // namespace controllers

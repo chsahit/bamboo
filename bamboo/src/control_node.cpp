@@ -395,20 +395,10 @@ private:
         bamboo::controllers::ControllerResult result =
             controller_->Step(robot_state, desired_q, desired_dq, desired_ddq);
 
-        // Check for any limit violation (position or torque)
-        if (result.joint_position_limit_violated || result.torque_limit_violated) {
+        // Check for torque limit violation
+        if (result.torque_limit_violated) {
           joint_limit_hit_ = true;
-          std::cout << "[CONTROL] ";
-          if (result.joint_position_limit_violated) {
-            std::cout << "Joint position limit violated";
-          }
-          if (result.joint_position_limit_violated && result.torque_limit_violated) {
-            std::cout << " and ";
-          }
-          if (result.torque_limit_violated) {
-            std::cout << "Torque limit violated";
-          }
-          std::cout << " - ending trajectory early" << std::endl;
+          std::cout << "[CONTROL] Torque limit violated - ending trajectory early" << std::endl;
           std::array<double, 7> zero_torques = {0.0, 0.0, 0.0, 0.0,
                                                 0.0, 0.0, 0.0};
           return franka::MotionFinished(franka::Torques(zero_torques));
