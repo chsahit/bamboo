@@ -6,6 +6,7 @@ Bamboo Client - A client for the bamboo control node.
 
 from __future__ import annotations
 
+import logging
 import time
 import zmq
 import msgpack
