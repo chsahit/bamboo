@@ -2,7 +2,6 @@
 
 """
 Bamboo Client - A client for the bamboo control node.
-Gripper communication uses ZMQ (unchanged).
 """
 
 from __future__ import annotations
@@ -207,13 +206,13 @@ class BambooFrankaClient:
         except Exception as e:
             raise RuntimeError(f"Gripper communication error: {e}")
 
-    def execute_joint_impedance_path(self, joint_confs: list, joint_vels: Optional[list]=None, gripper_isopen: bool=True,
+    def execute_joint_impedance_path(self, joint_confs: np.ndarray, joint_vels: Optional[np.ndarray]=None,
             durations: Optional[list]=None, default_duration:float=0.5) -> dict:
         """Execute joint impedance trajectory and wait for completion.
 
         Args:
-            joint_confs: List of joint configurations (7 values each)
-            joint_vels: List of joint velocities (7 values each) for each waypoint
+            joint_confs: (n, 7) array of joint configurations
+            joint_vels: (n, 7) array of of joint velocities for each waypoint
             gripper_isopen: Bool or list of bools for gripper state (ignored for now)
             durations: Optional list of durations (in seconds) for each waypoint.
                       If None, all waypoints use default_duration.
@@ -224,13 +223,24 @@ class BambooFrankaClient:
             Dict with 'success' (bool) and 'error' (str) if failed
         """
         try:
-            _log.debug(f'Executing {len(joint_confs)} joint waypoints')
+            # Validate joint_confs shape
+            if joint_confs.ndim != 2:
+                raise ValueError(f"joint_confs must be 2D array, got {joint_confs.ndim}D")
+            if joint_confs.shape[1] != 7:
+                raise ValueError(f"joint_confs must have 7 columns, got {joint_confs.shape[1]}")
+
+            _log.debug(f'Executing {joint_confs.shape[0]} joint waypoints')
 
             # Validate joint_vels parameter
             if joint_vels is None:
-                joint_vels = [[0, 0, 0, 0, 0, 0, 0] ] * len(joint_confs)
-            if joint_vels is not None and len(joint_vels) != len(joint_confs):
-                raise ValueError(f"joint_vels length ({len(joint_vels)}) must match joint_confs length ({len(joint_confs)})")
+                joint_vels = np.array([[0, 0, 0, 0, 0, 0, 0] ] * joint_confs.shape[0])
+            else:
+                if joint_vels.ndim != 2:
+                    raise ValueError(f"joint_vels must be 2D array, got {joint_vels.ndim}D")
+                if joint_vels.shape[1] != 7:
+                    raise ValueError(f"joint_vels must have 7 columns, got {joint_vels.shape[1]}")
+                if joint_vels.shape[0] != joint_confs.shape[0]:
+                    raise ValueError(f"joint_vels rows ({joint_vels.shape[0]}) must match joint_confs rows ({joint_confs.shape[0]})")
 
             # Build trajectory request with all waypoints
             waypoints = []
@@ -238,15 +248,7 @@ class BambooFrankaClient:
 
             # Create each waypoint as a TimedWaypoint
             for i, joint_conf in enumerate(joint_confs):
-                if len(joint_conf) != 7:
-                    raise ValueError(f"Joint configuration {i} must have 7 values, got {len(joint_conf)}")
-
-                # Validate joint velocity if provided
-                joint_vel = None
-                if joint_vels is not None:
-                    joint_vel = joint_vels[i]
-                    if len(joint_vel) != 7:
-                        raise ValueError(f"Joint velocity {i} must have 7 values, got {len(joint_vel)}")
+                joint_vel = joint_vels[i]
 
                 # Get waypoint duration
                 waypoint_duration = durations[i] if (durations is not None and i < len(durations)) else default_duration
@@ -256,8 +258,8 @@ class BambooFrankaClient:
 
                 # Create timed waypoint
                 waypoint = {
-                    "goal_q": list(joint_conf),
-                    "velocity": list(joint_vel) if joint_vel is not None else [],
+                    "goal_q": joint_conf.tolist(),
+                    "velocity": joint_vel.tolist(),
                     "duration": waypoint_duration,
                     "kp": [600.0] * 7,  # Default stiffness
                     "kd": [50.0] * 7,   # Default damping
