@@ -51,11 +51,8 @@ def main() -> None:
         # Get gripper state
         print("Getting gripper state...")
         state = client.get_gripper_state()
-        if state["success"]:
-            width = state["state"]["width"]
-            print(f"Gripper width: {width:.4f}m")
-        else:
-            print(f"Error: {state['error']}")
+        width = state["state"]["width"]
+        print(f"Gripper width: {width:.4f}m")
 
 
 if __name__ == "__main__":
