@@ -108,7 +108,7 @@ start_servers() {
     echo "Creating tmux session with multiple panes..."
 
     # Create new session with first pane for arm control node.
-    tmux new-session -d -s "$SESSION" -n "servers" bash -c "eval \"\$(conda shell.bash hook)\" && conda activate bamboo && cd bamboo/build/ && ./bamboo_control_node -r \"$ROBOT_IP\" -p \"$ROBOT_PORT\" -l \"$LISTEN_ADDR\"; read"
+    tmux new-session -d -s "$SESSION" -n "servers" bash -c "eval \"\$(conda shell.bash hook)\" && conda activate bamboo && cd controller/build/ && ./bamboo_control_node -r \"$ROBOT_IP\" -p \"$ROBOT_PORT\" -l \"$LISTEN_ADDR\"; read"
 
     # Split horizontally to create gripper pane
     tmux split-window -h -p 50 -t "$SESSION:0"
