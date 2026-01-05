@@ -18,13 +18,13 @@ namespace bamboo_msgs {
 
   // Waypoint with timing information
   struct TimedWaypoint {
-    std::vector<double> goal_q;      // Goal joint positions (7)
+    std::vector<double> q_goal;      // Goal joint positions (7)
     std::vector<double> velocity;    // Desired velocity at waypoint (7)
     double duration;                 // Duration for this waypoint
     std::vector<double> kp;          // Stiffness (7)
     std::vector<double> kd;          // Damping (7)
 
-    MSGPACK_DEFINE_MAP(goal_q, velocity, duration, kp, kd)
+    MSGPACK_DEFINE_MAP(q_goal, velocity, duration, kp, kd)
   };
 
   // Trajectory request

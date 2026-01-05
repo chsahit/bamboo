@@ -165,7 +165,7 @@ public:
         const bamboo_msgs::TimedWaypoint &waypoint = request.waypoints[i];
 
         // Validate goal has 7 values
-        if (waypoint.goal_q.size() != 7) {
+        if (waypoint.q_goal.size() != 7) {
           throw std::runtime_error("Joint configuration must have 7 values");
         }
 
@@ -176,7 +176,7 @@ public:
         } else if (request.default_duration > 0) {
           waypoint_duration = request.default_duration;
         } else {
-          waypoint_duration = 0.5; // Fallback default
+          waypoint_duration = 1.0; // Fallback default
         }
 
         // Get waypoint velocity
@@ -203,7 +203,7 @@ public:
         // Store goal position
         Eigen::Matrix<double, 7, 1> goal;
         for (int j = 0; j < 7; ++j) {
-          goal(j) = waypoint.goal_q[j];
+          goal(j) = waypoint.q_goal[j];
         }
 
         trajectory_goals.push_back(goal);
