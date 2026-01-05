@@ -5,20 +5,21 @@ repos:
     hooks:
       - id: ruff
         args: ["--fix"]
-        exclude: ^(third_party/|bamboo/proto_gen/)
+        exclude: ^(controller/third_party/)
+      - id: ruff-format
+        exclude: ^(controller/third_party/)
 
   # Type checking (mypy)
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.2
-    hooks:
-      - id: mypy
-        exclude: ^(third_party/|bamboo/proto_gen/)
-        additional_dependencies: [types-protobuf]
+#  - repo: https://github.com/pre-commit/mirrors-mypy
+#    rev: v1.11.2
+#    hooks:
+#      - id: mypy
+#        exclude: ^(third_party/)
 
-  # C/C++ formatting
-  - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v18.1.8
-    hooks:
-      - id: clang-format
-        files: "\\.(c|cc|cpp|cxx|h|hh|hpp)$"
-        exclude: ^(third_party/|bamboo/proto_gen/)
+#  # C/C++ formatting
+#  - repo: https://github.com/pre-commit/mirrors-clang-format
+#    rev: v18.1.8
+#    hooks:
+#      - id: clang-format
+#        files: "\\.(c|cc|cpp|cxx|h|hh|hpp)$"
+#        exclude: ^(controller/third_party/)

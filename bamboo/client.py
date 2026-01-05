@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-
-"""
-Bamboo Client - A client for the bamboo control node.
-"""
-
 from __future__ import annotations
 
 import logging

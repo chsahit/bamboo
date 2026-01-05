@@ -3,7 +3,7 @@
 
 import argparse
 
-from bamboo.bamboo_client import BambooFrankaClient
+from bamboo import BambooFrankaClient
 
 
 def main() -> None:

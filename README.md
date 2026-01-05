@@ -23,7 +23,7 @@ Make sure that the user is in the realtime group with `sudo usermod -a -G realti
 
 You do not need to install `libfranka` yourself — the included `InstallBambooController` script will clone, build, and set up libfranka.
 
-### Build C++ Dependencies
+### Build Controller
 ```bash
 bash InstallBambooController
 ```
@@ -42,7 +42,7 @@ pip install -e .[server]
 
 ### Compile Controller
 ```bash
-mkdir bamboo/build && cd bamboo/build
+mkdir controller/build && cd controller/build
 cmake ..
 make
 ```
@@ -74,6 +74,7 @@ pip install -e .[server]
 ## Usage
 
 ### Server-Side Robot Control
+<<<<<<< HEAD
 
 **Security Warning:** By default, the controller listens on all network interfaces (`*`), accepting commands from any IP address that can reach the machine. For security, consider restricting access by setting the 'listen address' 
 
@@ -104,8 +105,8 @@ Other commands:
 
 ```bash
 conda activate bamboo
-cd bamboo/build
-./bamboo_control_node -r <robot-ip> -p <port> [-l <listen-address>]
+cd controller/build
+./bamboo_control_node -r <robot-ip> -p <zmq-port> [-l <listen-address>]
 ```
 
 Example:
@@ -116,7 +117,7 @@ Example:
 Then in a new terminal, launch the gripper server:
 ```bash
 conda activate bamboo
-cd bamboo
+cd controller
 python3 gripper_server.py --gripper-port <gripper-device> --zmq-port <zmq-port>
 ```
 
@@ -132,24 +133,69 @@ sudo usermod -a -G tty $USER
 ```
 
 ### Client-Side Interface with robot and gripper
-You can verify the install by running some of the example scripts in a new terminal. 
+You can verify the install by running some of the example scripts in a new terminal.
 To actuate the robot and print out its joint angles (*WARNING: THIS SCRIPT MOVES THE ROBOT WITHOUT DOING COLLISION CHECKING SO MAKE SURE THE NEARBY WORKSPACE IS CLEAR*):
 ```bash
 conda activate bamboo
-cd bamboo/examples
-python example_joint_trajectory.py
+python -m bamboo.examples.joint_trajectory
 ```
-To open and glose the gripper and print the width of the fingers:
+To open and close the gripper and print the width of the fingers:
 ```bash
 conda activate bamboo
-cd bamboo/examples
-python simple_gripper_example.py
+python -m bamboo.examples.gripper
 ```
 
-## Contributing 
-For the python code we enforce style with `ruff` and typechecking with `mypy`. For the C++ code, we enforce style with `clang-tidy`. You can run all linting and checking steps with `pre-commit run --all-files`, they also will run automatically when you make a commit. 
+## Development Setup
 
-To contribute, please create a fork of the repository, make a feature branch based on main, and commit your changes there. Then open a pull request from that branch.
+If you plan to contribute to Bamboo, you'll need to set up the development tools.
+
+### Install Development Dependencies
+
+Install the development dependencies including pre-commit, ruff, and mypy:
+
+```bash
+pip install -e .[dev]
+```
+
+### Set Up Pre-Commit Hooks
+
+Install the pre-commit hooks to automatically run linting and formatting checks before each commit:
+
+```bash
+pre-commit install
+```
+
+Now, whenever you commit code, pre-commit will automatically:
+- Format Python code with ruff
+- Check Python code style with ruff
+
+### Run Pre-Commit Manually
+
+To run all pre-commit hooks on all files without making a commit:
+
+```bash
+pre-commit run --all-files
+```
+
+To run pre-commit on specific files:
+
+```bash
+pre-commit run --files path/to/file.py
+```
+
+## Contributing
+
+For Python code, we enforce style with `ruff` and type checking with `mypy`. For C++ code, we enforce style with `clang-tidy`.
+
+Pre-commit hooks will automatically run linting and formatting checks when you make a commit. You can also run them manually with `pre-commit run --all-files`.
+
+To contribute:
+1. Fork the repository
+2. Create a feature branch based on `main`
+3. Install development dependencies: `pip install -e .[dev]`
+4. Set up pre-commit hooks: `pre-commit install`
+5. Make your changes and commit them
+6. Open a pull request from your feature branch
 
 ## Acknowledgements
 

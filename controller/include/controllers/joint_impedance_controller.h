@@ -20,7 +20,6 @@ class JointImpedanceController {
 public:
   JointImpedanceController(franka::Model *model);
 
-  // Compute torque command given current state and desired joint position
   // Returns torques and a boolean indicating if any joint limit was violated
   ControllerResult Step(const franka::RobotState &robot_state,
                         const Eigen::Matrix<double, 7, 1> &desired_q,
