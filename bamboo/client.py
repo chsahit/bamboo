@@ -212,8 +212,13 @@ class BambooFrankaClient:
         except zmq.Again:
             raise BambooTimeoutError("Timeout waiting for gripper server response") from None
 
-    def execute_joint_impedance_path(self, joint_confs: list, joint_vels: Optional[list]=None,
-            durations: Optional[list]=None, default_duration:float=0.5) -> dict:
+    def execute_joint_impedance_path(
+        self,
+        joint_confs: list[list[float]],
+        joint_vels: Optional[list[list[float]]] = None,
+        durations: Optional[list[float]] = None,
+        default_duration: float = 1.0
+    ) -> dict[str, bool | str]:
         """Execute joint impedance trajectory and wait for completion.
 
         Args:
@@ -222,7 +227,7 @@ class BambooFrankaClient:
             durations: Optional list of durations (in seconds) for each waypoint.
                       If None, all waypoints use default_duration.
                       If shorter than joint_confs, remaining waypoints use default_duration.
-            default_duration: Default duration in seconds for waypoints (default: 0.5s)
+            default_duration: Default duration in seconds for waypoints (default: 1.0s)
 
         Returns:
             Dict with 'success' (bool) and 'error' (str) if failed

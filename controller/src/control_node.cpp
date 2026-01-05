@@ -173,7 +173,7 @@ public:
         } else if (request.default_duration > 0) {
           waypoint_duration = request.default_duration;
         } else {
-          waypoint_duration = 0.5; // Fallback default
+          waypoint_duration = 1.0; // Fallback default
         }
 
         // Get waypoint velocity
