@@ -11,9 +11,23 @@ from typing import Optional, TypedDict
 _log = logging.getLogger(__name__)
 
 
+class BambooConnectionError(Exception):
+    """Raised when connection to bamboo control node fails."""
+    pass
+
+
+class BambooTimeoutError(Exception):
+    """Raised when operation times out."""
+    pass
+
+
+class BambooGripperError(Exception):
+    """Raised when gripper operation fails."""
+    pass
+
+
 class JointStates(TypedDict, total=False):
     """Type definition for joint states dictionary."""
-    success: bool
     ee_pose: list[list[float]]
     qpos: list[float]
     gripper_state: float
@@ -59,15 +73,21 @@ class BambooFrankaClient:
         self._test_connection()
 
     def _test_connection(self) -> None:
-        """Test connection to the bamboo control node."""
+        """Test connection to the bamboo control node.
+
+        Raises:
+            BambooConnectionError: If connection test fails
+        """
         try:
             # Try to receive a state message to verify connection
             _log.debug(f"Establishing connection to bamboo control node at {self.server_ip}:{self.control_port}...")
             self._get_latest_state()
             _log.info(f"Successfully connected to bamboo control node at {self.server_ip}:{self.control_port}")
         except Exception as e:
-            _log.warning(f"Could not connect to bamboo control node at {self.server_ip}:{self.control_port}: {e}")
-            _log.warning("Make sure the bamboo control node is running.")
+            raise BambooConnectionError(
+                f"Could not connect to bamboo control node at {self.server_ip}:{self.control_port}. "
+                f"Make sure the bamboo control node is running. Error: {e}"
+            ) from e
 
     def _get_latest_state(self) -> dict:
         """Get the latest robot state from the bamboo control node.
@@ -76,7 +96,8 @@ class BambooFrankaClient:
             dict: The latest robot state containing q, dq, tau_J, O_T_EE, time_sec
 
         Raises:
-            RuntimeError: If no state message is received
+            BambooConnectionError: If server returns error
+            BambooTimeoutError: If state read times out
         """
         try:
             # Create request
@@ -90,62 +111,52 @@ class BambooFrankaClient:
             response = msgpack.unpackb(response_data, raw=False)
 
             if not response.get("success", False):
-                raise RuntimeError(f"Failed to get robot state: {response.get('error', 'Unknown error')}")
+                raise BambooConnectionError(f"Failed to get robot state: {response.get('error', 'Unknown error')}")
 
             return response["data"]
 
         except zmq.Again:
-            raise RuntimeError("Timeout waiting for robot state response")
-        except Exception as e:
-            raise RuntimeError(f"Error receiving state from bamboo control node: {e}")
+            raise BambooTimeoutError("Timeout waiting for robot state response") from None
 
 
     def get_joint_states(self) -> JointStates:
         """Get current robot joint states.
 
         Returns:
-            Dict with 'success', 'ee_pose', 'qpos', 'gripper_state', and 'error' if failed
-            Format matches DeoxysFrankaServer.get_joint_states() for compatibility
+            Dict with 'ee_pose', 'qpos', 'gripper_state'
+
+        Raises:
+            BambooConnectionError: If connection to controller fails
+            BambooTimeoutError: If state read times out
+            BambooGripperError: If gripper state read fails
         """
-        try:
-            # Get latest state from bamboo control node
-            state_msg = self._get_latest_state()
+        # Get latest state from bamboo control node
+        state_msg = self._get_latest_state()
 
-            # Extract joint positions
-            qpos = list(state_msg["q"])  # Convert to list for JSON serialization
+        # Extract joint positions
+        qpos = list(state_msg["q"])  # Convert to list for JSON serialization
 
-            # Extract end-effector pose (4x4 transformation matrix)
-            # Convert flat array to 4x4 matrix (column-major)
-            ee_pose_flat = list(state_msg["O_T_EE"])
-            ee_pose_matrix = np.array(ee_pose_flat).reshape(4, 4)
-            # Transpose from column-major to row-major
-            ee_pose = ee_pose_matrix.T.tolist()
+        # Extract end-effector pose (4x4 transformation matrix)
+        # Convert flat array to 4x4 matrix (column-major)
+        ee_pose_flat = list(state_msg["O_T_EE"])
+        ee_pose_matrix = np.array(ee_pose_flat).reshape(4, 4)
+        # Transpose from column-major to row-major
+        ee_pose = ee_pose_matrix.T.tolist()
 
-            # Get gripper state if available, otherwise use default
-            if self.enable_gripper and self.gripper_socket is not None:
-                try:
-                    gripper_result = self._send_gripper_command({"action": "get_state"})
-                    if gripper_result.get("success") and "state" in gripper_result:
-                        gripper_state = gripper_result["state"].get('width', 0.0)
-                    else:
-                        gripper_state = 0.0
-                except Exception:
-                    gripper_state = 0.0  # Fallback if gripper read fails
-            else:
-                gripper_state = 0.0  # No gripper enabled
+        # Get gripper state if available, otherwise use default
+        if self.enable_gripper and self.gripper_socket is not None:
+            gripper_result = self._send_gripper_command({"action": "get_state"})
+            if not gripper_result.get("success"):
+                raise BambooGripperError(f"Failed to get gripper state: {gripper_result.get('error', 'Unknown error')}")
+            gripper_state = gripper_result["state"]["width"]
+        else:
+            gripper_state = 0.0  # No gripper enabled
 
-            return {
-                'success': True,
-                'ee_pose': ee_pose,
-                'qpos': qpos,
-                'gripper_state': gripper_state
-            }
-
-        except Exception as e:
-            _log.error(f"Error in get_joint_states: {e}")
-            return {
-                "success": False,
-            }
+        return {
+            'ee_pose': ee_pose,
+            'qpos': qpos,
+            'gripper_state': gripper_state
+        }
 
     def close(self) -> None:
         """Clean up ZMQ resources."""
@@ -182,10 +193,11 @@ class BambooFrankaClient:
             Dict with response from gripper server
 
         Raises:
-            RuntimeError: If gripper communication fails
+            BambooGripperError: If gripper not enabled
+            BambooTimeoutError: If gripper command times out
         """
         if not self.enable_gripper or self.gripper_socket is None:
-            raise RuntimeError("Gripper not enabled or not connected")
+            raise BambooGripperError("Gripper not enabled or not connected")
 
         try:
             # Send command
@@ -198,18 +210,15 @@ class BambooFrankaClient:
             return response  # type: ignore[no-any-return]
 
         except zmq.Again:
-            raise RuntimeError("Timeout waiting for gripper server response")
-        except Exception as e:
-            raise RuntimeError(f"Gripper communication error: {e}")
+            raise BambooTimeoutError("Timeout waiting for gripper server response") from None
 
-    def execute_joint_impedance_path(self, joint_confs: list, joint_vels: Optional[list]=None, gripper_isopen: bool=True,
+    def execute_joint_impedance_path(self, joint_confs: list, joint_vels: Optional[list]=None,
             durations: Optional[list]=None, default_duration:float=0.5) -> dict:
         """Execute joint impedance trajectory and wait for completion.
 
         Args:
             joint_confs: List of joint configurations (7 values each)
             joint_vels: List of joint velocities (7 values each) for each waypoint
-            gripper_isopen: Bool or list of bools for gripper state (ignored for now)
             durations: Optional list of durations (in seconds) for each waypoint.
                       If None, all waypoints use default_duration.
                       If shorter than joint_confs, remaining waypoints use default_duration.
@@ -251,7 +260,7 @@ class BambooFrankaClient:
 
                 # Create timed waypoint
                 waypoint = {
-                    "goal_q": list(joint_conf),
+                    "q_goal": list(joint_conf),
                     "velocity": list(joint_vel) if joint_vel is not None else [],
                     "duration": waypoint_duration,
                     "kp": [600.0] * 7,  # Default stiffness
@@ -307,9 +316,11 @@ class BambooFrankaClient:
         except zmq.Again:
             _log.error("Timeout waiting for trajectory completion")
             return {"success": False, "error": "Timeout waiting for trajectory completion"}
-        except Exception as e:
-            _log.error(f"Error in execute_joint_impedance_path: {e}")
-            return {"success": False, "error": str(e)}
+        except ValueError as e:
+            # Validation errors from parameter checks
+            error_msg = f"Invalid trajectory parameters: {e}"
+            _log.error(error_msg)
+            return {"success": False, "error": error_msg}
 
     def open_gripper(self, speed: float = 0.05, force: float = 0.1, blocking: bool = True) -> dict:
         """Open the gripper.
@@ -317,22 +328,22 @@ class BambooFrankaClient:
         Args:
             speed: Gripper opening speed (0.0 to 1.0)
             force: Gripper force (0.0 to 1.0)
+            blocking: Whether to block until gripper finishes
 
         Returns:
-            Dict with 'success' (bool) and 'error' (str) if failed
+            Dict with response from gripper server
+
+        Raises:
+            BambooGripperError: If gripper not enabled or command fails
+            BambooTimeoutError: If gripper command times out
         """
-        try:
-            command = {
-                "action": "open",
-                "speed": speed,
-                "force": force,
-                "blocking": blocking
-            }
-            response = self._send_gripper_command(command)
-            return response
-        except Exception as e:
-            _log.error(f"Error in open_gripper: {e}")
-            return {"success": False, "error": str(e)}
+        command = {
+            "action": "open",
+            "speed": speed,
+            "force": force,
+            "blocking": blocking
+        }
+        return self._send_gripper_command(command)
 
     def close_gripper(self, speed: float = 0.05, force: float = 0.8, blocking: bool = True) -> dict:
         """Close the gripper.
@@ -340,36 +351,35 @@ class BambooFrankaClient:
         Args:
             speed: Gripper closing speed (0.0 to 1.0)
             force: Gripper force (0.0 to 1.0)
+            blocking: Whether to block until gripper finishes
 
         Returns:
-            Dict with 'success' (bool) and 'error' (str) if failed
+            Dict with response from gripper server
+
+        Raises:
+            BambooGripperError: If gripper not enabled or command fails
+            BambooTimeoutError: If gripper command times out
         """
-        try:
-            command = {
-                "action": "close",
-                "speed": speed,
-                "force": force,
-                "blocking": blocking
-            }
-            response = self._send_gripper_command(command)
-            return response
-        except Exception as e:
-            _log.error(f"Error in close_gripper: {e}")
-            return {"success": False, "error": str(e)}
+        command = {
+            "action": "close",
+            "speed": speed,
+            "force": force,
+            "blocking": blocking
+        }
+        return self._send_gripper_command(command)
 
     def get_gripper_state(self) -> dict:
         """Get current gripper state.
 
         Returns:
-            Dict with 'success', 'state', and 'error' (str) if failed
+            Dict with 'success' and 'state' from gripper server
+
+        Raises:
+            BambooGripperError: If gripper not enabled or command fails
+            BambooTimeoutError: If gripper command times out
         """
-        try:
-            command = {"action": "get_state"}
-            response = self._send_gripper_command(command)
-            return response
-        except Exception as e:
-            _log.error(f"Error in get_gripper_state: {e}")
-            return {"success": False, "error": str(e)}
+        command = {"action": "get_state"}
+        return self._send_gripper_command(command)
 
 
 def main() -> None:
@@ -406,15 +416,11 @@ def main() -> None:
 
             for i in range(args.samples):
                 result = client.get_joint_states()
-
-                if result['success']:
-                    print(f"Sample {i+1}:")
-                    print(f"  Joint positions: {[f'{q:.4f}' for q in result['qpos']]}")
-                    print(f"  EE position: [{result['ee_pose'][0][3]:.4f}, "
-                          f"{result['ee_pose'][1][3]:.4f}, {result['ee_pose'][2][3]:.4f}]")
-                    print(f"  Gripper state: {result['gripper_state']}")
-                else:
-                    print(f"Sample {i+1}: ERROR - {result.get('error', 'Unknown error')}")
+                print(f"Sample {i+1}:")
+                print(f"  Joint positions: {[f'{q:.4f}' for q in result['qpos']]}")
+                print(f"  EE position: [{result['ee_pose'][0][3]:.4f}, "
+                      f"{result['ee_pose'][1][3]:.4f}, {result['ee_pose'][2][3]:.4f}]")
+                print(f"  Gripper state: {result['gripper_state']}")
 
                 if i < args.samples - 1:
                     time.sleep(0.2)  # Small delay between samples
