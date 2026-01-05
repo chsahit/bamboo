@@ -10,7 +10,7 @@ import logging
 import time
 import zmq
 import argparse
-from third_party.robotiq_gripper_client import RobotiqGripperClient
+from controller.third_party.robotiq_gripper_client import RobotiqGripperClient
 
 
 class GripperServer:
