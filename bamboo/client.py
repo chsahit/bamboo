@@ -81,6 +81,57 @@ class BambooFrankaClient:
         # Test connection by trying to receive a state message
         self._test_connection()
 
+    def _recreate_control_socket(self) -> None:
+        """Recreate the control socket after it becomes corrupted.
+
+        This is necessary when ZMQ REQ socket gets into a bad state,
+        typically after connection issues or pattern violations.
+        """
+        _log.warning("Recreating control socket due to socket error")
+
+        # Close the old socket if it exists
+        if hasattr(self, "control_socket") and self.control_socket is not None:
+            try:
+                self.control_socket.close()
+            except Exception as e:
+                _log.warning(f"Failed to close corrupted control socket: {e}")
+
+        # Try to create a new socket with the existing context
+        try:
+            self.control_socket = self.zmq_context.socket(zmq.REQ)
+        except zmq.ZMQError as e:
+            # If socket creation fails, the context itself may be corrupted
+            # Recreate the entire context
+            _log.warning(f"Failed to create socket from existing context ({e}). Recreating ZMQ context...")
+
+            # Close gripper socket if it exists
+            if hasattr(self, "gripper_socket") and self.gripper_socket is not None:
+                try:
+                    self.gripper_socket.close()
+                except Exception as e2:
+                    _log.warning(f"Failed to close gripper socket: {e2}")
+
+            # Terminate old context
+            try:
+                self.zmq_context.term()
+            except Exception as e2:
+                _log.warning(f"Failed to terminate ZMQ context: {e2}")
+
+            # Create new context and sockets
+            self.zmq_context = zmq.Context()
+            self.control_socket = self.zmq_context.socket(zmq.REQ)
+
+            # Recreate gripper socket if it was enabled
+            if self.enable_gripper:
+                self.gripper_socket = self.zmq_context.socket(zmq.REQ)
+                self.gripper_socket.connect(f"tcp://{self.server_ip}:{self.gripper_port}")
+                self.gripper_socket.setsockopt(zmq.RCVTIMEO, 5000)
+                _log.debug(f"Gripper socket recreated at {self.server_ip}:{self.gripper_port}")
+
+        self.control_socket.connect(f"tcp://{self.server_ip}:{self.control_port}")
+        self.control_socket.setsockopt(zmq.RCVTIMEO, 5000)  # 5 second timeout
+        _log.debug(f"Control socket reconnected to {self.server_ip}:{self.control_port}")
+
     def _test_connection(self) -> None:
         """Test connection to the bamboo control node.
 
@@ -98,34 +149,54 @@ class BambooFrankaClient:
                 f"Make sure the bamboo control node is running. Error: {e}"
             ) from e
 
-    def _get_latest_state(self) -> dict:
+    def _get_latest_state(self, max_retries: int = 3) -> dict:
         """Get the latest robot state from the bamboo control node.
+
+        Args:
+            max_retries: Maximum number of retry attempts if socket becomes corrupted (default: 3)
 
         Returns:
             dict: The latest robot state containing q, dq, tau_J, O_T_EE, time_sec
 
         Raises:
-            BambooConnectionError: If server returns error
+            BambooConnectionError: If server returns error or max retries exceeded
             BambooTimeoutError: If state read times out
         """
-        try:
-            # Create request
-            request = {"command": "get_robot_state"}
+        last_error = None
 
-            # Send request
-            self.control_socket.send(msgpack.packb(request))
+        for attempt in range(max_retries):
+            try:
+                # Create request
+                request = {"command": "get_robot_state"}
 
-            # Receive response
-            response_data = self.control_socket.recv()
-            response = msgpack.unpackb(response_data, raw=False)
+                # Send request
+                self.control_socket.send(msgpack.packb(request))
 
-            if not response.get("success", False):
-                raise BambooConnectionError(f"Failed to get robot state: {response.get('error', 'Unknown error')}")
+                # Receive response
+                response_data = self.control_socket.recv()
+                response = msgpack.unpackb(response_data, raw=False)
 
-            return response["data"]
+                if not response.get("success", False):
+                    raise BambooConnectionError(f"Failed to get robot state: {response.get('error', 'Unknown error')}")
 
-        except zmq.Again:
-            raise BambooTimeoutError("Timeout waiting for robot state response") from None
+                return response["data"]
+
+            except zmq.Again:
+                raise BambooTimeoutError("Timeout waiting for robot state response") from None
+
+            except zmq.ZMQError as e:
+                # Handle socket corruption errors (e.g., "Socket operation on non-socket")
+                last_error = e
+                if attempt < max_retries - 1:
+                    _log.warning(f"ZMQ socket error on attempt {attempt + 1}/{max_retries}: {e}. Recreating socket...")
+                    self._recreate_control_socket()
+                    # Retry the operation with the new socket
+                    continue
+
+        # Max retries exceeded, raise error
+        raise BambooConnectionError(
+            f"Failed to get robot state after {max_retries} attempts due to socket errors: {last_error}"
+        ) from last_error
 
     def get_joint_states(self) -> JointStates:
         """Get current robot joint states.
