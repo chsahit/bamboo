@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Determine the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 SESSION="bamboo"
 eval "$(conda shell.bash hook)"
 
@@ -9,6 +12,7 @@ ROBOT_PORT="5555"
 LISTEN_ADDR="*"
 GRIPPER_DEVICE="/dev/ttyUSB0"
 GRIPPER_PORT="5559"
+CONDA_ENV="bamboo"
 COMMAND=""
 
 # Parse arguments
@@ -34,6 +38,10 @@ while [[ $# -gt 0 ]]; do
       GRIPPER_PORT="$2"
       shift 2
       ;;
+    --conda_env)
+      CONDA_ENV="$2"
+      shift 2
+      ;;
     --help|-h)
       echo "Usage: $0 [COMMAND] [OPTIONS]"
       echo ""
@@ -49,6 +57,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --listen_ip IP          ZMQ server listen address (default: $LISTEN_ADDR)"
       echo "  --gripper_device DEV    Gripper device (default: $GRIPPER_DEVICE)"
       echo "  --gripper_port PORT     Gripper server ZMQ port (default: $GRIPPER_PORT)"
+      echo "  --conda_env ENV         Conda environment name for gripper server (default: $CONDA_ENV)"
       echo "  --help, -h              Show this help"
       echo ""
       echo "Examples:"
@@ -105,17 +114,18 @@ start_servers() {
     echo "  Listen address: $LISTEN_ADDR"
     echo "  Gripper device: $GRIPPER_DEVICE"
     echo "  Gripper port: $GRIPPER_PORT"
+    echo "  Conda environment: $CONDA_ENV"
     echo "Creating tmux session with multiple panes..."
 
     # Create new session with first pane for arm control node.
-    tmux new-session -d -s "$SESSION" -n "servers" bash -c "eval \"\$(conda shell.bash hook)\" && conda activate bamboo && cd controller/build/ && ./bamboo_control_node -r \"$ROBOT_IP\" -p \"$ROBOT_PORT\" -l \"$LISTEN_ADDR\"; read"
+    tmux new-session -d -s "$SESSION" -n "servers" bash -c "cd \"$SCRIPT_DIR/controller/build/\" && ./bamboo_control_node -r \"$ROBOT_IP\" -p \"$ROBOT_PORT\" -l \"$LISTEN_ADDR\"; read"
 
     # Split horizontally to create gripper pane
     tmux split-window -h -p 50 -t "$SESSION:0"
 
     # Setup the gripper server pane
-    tmux send-keys -t "$SESSION:0.1" "eval \"\$(conda shell.bash hook)\" && conda activate bamboo" C-m
-    tmux send-keys -t "$SESSION:0.1" "cd controller" C-m
+    tmux send-keys -t "$SESSION:0.1" "eval \"\$(conda shell.bash hook)\" && conda activate $CONDA_ENV" C-m
+    tmux send-keys -t "$SESSION:0.1" "cd \"$SCRIPT_DIR/controller\"" C-m
     tmux send-keys -t "$SESSION:0.1" "python gripper_server.py --gripper-port $GRIPPER_DEVICE --zmq-port $GRIPPER_PORT" C-m
 
 

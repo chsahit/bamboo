@@ -85,7 +85,7 @@ bash RunBambooController
 
 The script supports configuration flags:
 ```bash
-bash RunBambooController start --robot_ip 172.16.0.2 --control_port 5555 --listen_ip "*" --gripper_device /dev/ttyUSB0 --gripper_port 5559
+bash RunBambooController start --robot_ip 172.16.0.2 --control_port 5555 --listen_ip "*" --gripper_device /dev/ttyUSB0 --gripper_port 5559 --conda_env bamboo
 ```
 
 Available options:
@@ -94,6 +94,7 @@ Available options:
 - `--listen_ip`: ZMQ server listen address (default: * for all interfaces)
 - `--gripper_device`: Gripper device (default: /dev/ttyUSB0)
 - `--gripper_port`: Gripper server ZMQ port (default: 5559)
+- `--conda_env`: Conda environment name (default: bamboo)
 
 Other commands:
 - `bash RunBambooController status` - Check server status
