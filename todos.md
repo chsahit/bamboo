@@ -2,10 +2,7 @@
 
 ## Sahit
 
-- [ ] controller should fail if any of the joints hit a joint limit
-- [ ] Bash script for starting controller and gripper in tmux session
 - [ ] tag a v1.0.0 on github
-- [ ] add authentication (lower priority, just add note in README)
 - [ ] MinJerkInterpolator bug: `do_min_jerk_` is always false and never set, so the "MinJerkInterpolator" only does linear interpolation. Either remove the flag and always apply min-jerk transform, or add a way to set it.
 - [ ] Remove unused kp/kd fields from TimedWaypoint message - they're sent from client but never used by controller (controller uses fixed gains from JointImpedanceController). Remove from bamboo_messages.h and client.py
 - [ ] Controller sends dq, tau_J, time_sec in RobotState but client never uses them (only uses q and O_T_EE). Consider removing these fields or document why they're included.
@@ -22,6 +19,9 @@
 
 ## Done
 
+- [x] add authentication (lower priority, just add note in README)
+- [x] controller should fail if any of the joints hit a joint limit
+- [x] Bash script for starting controller and gripper in tmux session
 - [x] Naming consistency - refactored all C++ code to use q_adjective pattern (q_current, q_goal, dq_current, v_start, v_goal)
 - [x] Package client differently for pypi - separated controller/ and bamboo/ directories, only bamboo/ gets packaged
 - [x] move gripper logic to bamboo/third_party - moved to controller/third_party/
