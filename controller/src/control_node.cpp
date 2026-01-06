@@ -5,6 +5,7 @@
 #include <cmath>
 #include <csignal>
 #include <exception>
+#include <getopt.h>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -14,6 +15,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <unistd.h>
 #include <vector>
 #include <map>
 
@@ -68,6 +70,7 @@ private:
   bamboo::interpolators::MinJerkInterpolator *interpolator_;
 
   std::atomic<bool> control_running_{false};
+  std::atomic<bool> joint_limit_hit_{false};
 
   // Control parameters
   const int traj_rate_ = 500; // Hz
@@ -235,6 +238,7 @@ private:
       return false;
 
     control_running_ = true;
+    joint_limit_hit_ = false;
     double control_time = 0.0;
 
     // Reset velocity and acceleration tracking for new trajectory
@@ -390,12 +394,21 @@ private:
         }
 
         // Compute control torques
-        std::array<double, 7> tau_d =
-            controller_->Step(robot_state, q_desired, dq_desired, ddq_desired);
+        bamboo::controllers::ControllerResult result =
+            controller_->Step(robot_state, q_desired , dq_desired, ddq_desired);
+
+        // Check for torque limit violation
+        if (result.torque_limit_violated) {
+          joint_limit_hit_ = true;
+          std::cout << "[CONTROL] Torque limit violated - ending trajectory early" << std::endl;
+          std::array<double, 7> zero_torques = {0.0, 0.0, 0.0, 0.0,
+                                                0.0, 0.0, 0.0};
+          return franka::MotionFinished(franka::Torques(zero_torques));
+        }
 
         // Apply rate limiting
         std::array<double, 7> tau_d_rate_limited = franka::limitRate(
-            franka::kMaxTorqueRate, tau_d, robot_state.tau_J_d);
+            franka::kMaxTorqueRate, result.torques, robot_state.tau_J_d);
 
         // Check if all waypoints completed and robot has stopped
         if (current_waypoint >= goals.size() - 1 &&
@@ -466,6 +479,13 @@ private:
       // Execute control
       robot_->control(control_callback);
       control_running_ = false;
+
+      // Check if trajectory failed due to joint limit violation
+      if (joint_limit_hit_) {
+        std::cerr << "[TRAJECTORY] Trajectory failed due to joint limit violation"
+                  << std::endl;
+        return false;
+      }
 
       if (log_err_) {
         // Print max joint error across all waypoint final errors
@@ -546,7 +566,11 @@ msgpack::sbuffer handleExecuteTrajectory(BambooControlServer &server,
   packer.pack("success");
   packer.pack(success);
   packer.pack("error");
-  packer.pack(std::string(""));
+  if (!success) {
+    packer.pack(std::string("Joint limit violated during trajectory execution"));
+  } else {
+    packer.pack(std::string(""));
+  }
 
   return response_buf;
 }
@@ -679,18 +703,47 @@ int main(int argc, char **argv) {
   // Register signal handler for graceful shutdown
   std::signal(SIGINT, signalHandler);
 
-  if (argc != 3) {
-    std::cerr << "Usage: " << argv[0] << " <robot-ip> <port>" << std::endl;
+  std::string robot_ip;
+  std::string port;
+  std::string listen_address = "*";  // default
+
+  int opt;
+  while ((opt = getopt(argc, argv, "r:p:l:h")) != -1) {
+    switch (opt) {
+      case 'r':
+        robot_ip = optarg;
+        break;
+      case 'p':
+        port = optarg;
+        break;
+      case 'l':
+        listen_address = optarg;
+        break;
+      case 'h':
+      case '?':
+      default:
+        std::cerr << "Usage: " << argv[0] << " -r <robot-ip> -p <port> [-l <listen-address>]" << std::endl;
+        std::cerr << "  -r: Robot IP address (required)" << std::endl;
+        std::cerr << "  -p: Port number (required)" << std::endl;
+        std::cerr << "  -l: Listen address (default: * for all interfaces)" << std::endl;
+        std::cerr << "  -h: Show this help" << std::endl;
+        return -1;
+    }
+  }
+
+  // Validate required arguments
+  if (robot_ip.empty() || port.empty()) {
+    std::cerr << "Error: Robot IP and port are required" << std::endl;
+    std::cerr << "Usage: " << argv[0] << " -r <robot-ip> -p <port> [-l <listen-address>]" << std::endl;
     return -1;
   }
 
-  const std::string robot_ip = argv[1];
-  const std::string port = argv[2];
-  const std::string server_address = "tcp://*:" + port;
+  const std::string server_address = "tcp://" + listen_address + ":" + port;
 
   std::cout << "Bamboo Control Node Starting..." << std::endl;
   std::cout << "Robot IP: " << robot_ip << std::endl;
   std::cout << "Port: " << port << std::endl;
+  std::cout << "Listen address: " << listen_address << std::endl;
 
   try {
     // Connect to robot

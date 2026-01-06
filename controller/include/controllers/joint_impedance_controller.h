@@ -11,17 +11,22 @@
 namespace bamboo {
 namespace controllers {
 
+struct ControllerResult {
+  std::array<double, 7> torques;
+  bool torque_limit_violated;
+};
+
 class JointImpedanceController {
 public:
   JointImpedanceController(franka::Model *model);
 
-  // Compute torque command given current state and desired joint position
-  std::array<double, 7> Step(const franka::RobotState &robot_state,
-                             const Eigen::Matrix<double, 7, 1> &q_desired,
-                             const Eigen::Matrix<double, 7, 1> &dq_desired =
-                                 Eigen::Matrix<double, 7, 1>::Zero(),
-                             const Eigen::Matrix<double, 7, 1> &ddq_desired =
-                                 Eigen::Matrix<double, 7, 1>::Zero());
+  // Returns torques and a boolean indicating if any joint limit was violated
+  ControllerResult Step(const franka::RobotState &robot_state,
+                        const Eigen::Matrix<double, 7, 1> &q_desired,
+                        const Eigen::Matrix<double, 7, 1> &dq_desired =
+                            Eigen::Matrix<double, 7, 1>::Zero(),
+                        const Eigen::Matrix<double, 7, 1> &ddq_desired =
+                            Eigen::Matrix<double, 7, 1>::Zero());
 
   // Set controller gains (optional - uses defaults if not called)
   void SetGains(const std::array<double, 7> &kp,
@@ -33,10 +38,6 @@ private:
   // Controller gains
   Eigen::Matrix<double, 7, 1> Kp_;
   Eigen::Matrix<double, 7, 1> Kd_;
-
-  // Joint limits
-  Eigen::Matrix<double, 7, 1> joint_max_;
-  Eigen::Matrix<double, 7, 1> joint_min_;
 
   // Torque limits per joint
   Eigen::Matrix<double, 7, 1> joint_tau_limits_;

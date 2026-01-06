@@ -1,33 +1,37 @@
 from __future__ import annotations
 
-import json
 import logging
 import time
-import zmq
+from typing import TypedDict
+
 import msgpack
 import numpy as np
-from typing import Optional, TypedDict
+import zmq
 
 _log = logging.getLogger(__name__)
 
 
 class BambooConnectionError(Exception):
     """Raised when connection to bamboo control node fails."""
+
     pass
 
 
 class BambooTimeoutError(Exception):
     """Raised when operation times out."""
+
     pass
 
 
 class BambooGripperError(Exception):
     """Raised when gripper operation fails."""
+
     pass
 
 
 class JointStates(TypedDict, total=False):
     """Type definition for joint states dictionary."""
+
     ee_pose: list[list[float]]
     qpos: list[float]
     gripper_state: float
@@ -36,8 +40,13 @@ class JointStates(TypedDict, total=False):
 class BambooFrankaClient:
     """Client for communicating with the bamboo control node."""
 
-    def __init__(self, control_port: int = 5555, server_ip: str = "localhost",
-                 gripper_port: int = 5559, enable_gripper: bool = True):
+    def __init__(
+        self,
+        control_port: int = 5555,
+        server_ip: str = "localhost",
+        gripper_port: int = 5559,
+        enable_gripper: bool = True,
+    ):
         """Initialize Bamboo Franka Client.
 
         Args:
@@ -118,7 +127,6 @@ class BambooFrankaClient:
         except zmq.Again:
             raise BambooTimeoutError("Timeout waiting for robot state response") from None
 
-
     def get_joint_states(self) -> JointStates:
         """Get current robot joint states.
 
@@ -152,19 +160,15 @@ class BambooFrankaClient:
         else:
             gripper_state = 0.0  # No gripper enabled
 
-        return {
-            'ee_pose': ee_pose,
-            'qpos': qpos,
-            'gripper_state': gripper_state
-        }
+        return {"ee_pose": ee_pose, "qpos": qpos, "gripper_state": gripper_state}
 
     def close(self) -> None:
         """Clean up ZMQ resources."""
-        if hasattr(self, 'control_socket') and self.control_socket is not None:
+        if hasattr(self, "control_socket") and self.control_socket is not None:
             self.control_socket.close()
-        if hasattr(self, 'gripper_socket') and self.gripper_socket is not None:
+        if hasattr(self, "gripper_socket") and self.gripper_socket is not None:
             self.gripper_socket.close()
-        if hasattr(self, 'zmq_context') and self.zmq_context is not None:
+        if hasattr(self, "zmq_context") and self.zmq_context is not None:
             self.zmq_context.term()
 
     def __enter__(self) -> BambooFrankaClient:
@@ -201,11 +205,11 @@ class BambooFrankaClient:
 
         try:
             # Send command
-            self.gripper_socket.send_string(json.dumps(command))
+            self.gripper_socket.send(msgpack.packb(command))
 
             # Receive response
-            response_str = self.gripper_socket.recv_string()
-            response = json.loads(response_str)
+            response_data = self.gripper_socket.recv()
+            response = msgpack.unpackb(response_data, raw=False)
 
             return response  # type: ignore[no-any-return]
 
@@ -214,16 +218,16 @@ class BambooFrankaClient:
 
     def execute_joint_impedance_path(
         self,
-        joint_confs: list[list[float]],
-        joint_vels: Optional[list[list[float]]] = None,
-        durations: Optional[list[float]] = None,
-        default_duration: float = 1.0
+        joint_confs: np.ndarray,
+        joint_vels: np.ndarray | None = None,
+        durations: list | None = None,
+        default_duration: float = 0.5,
     ) -> dict[str, bool | str]:
         """Execute joint impedance trajectory and wait for completion.
 
         Args:
-            joint_confs: List of joint configurations (7 values each)
-            joint_vels: List of joint velocities (7 values each) for each waypoint
+            joint_confs: (n, 7) array of joint configurations
+            joint_vels: (n, 7) array of of joint velocities for each waypoint
             durations: Optional list of durations (in seconds) for each waypoint.
                       If None, all waypoints use default_duration.
                       If shorter than joint_confs, remaining waypoints use default_duration.
@@ -233,13 +237,26 @@ class BambooFrankaClient:
             Dict with 'success' (bool) and 'error' (str) if failed
         """
         try:
-            _log.debug(f'Executing {len(joint_confs)} joint waypoints')
+            # Validate joint_confs shape
+            if joint_confs.ndim != 2:
+                raise ValueError(f"joint_confs must be 2D array, got {joint_confs.ndim}D")
+            if joint_confs.shape[1] != 7:
+                raise ValueError(f"joint_confs must have 7 columns, got {joint_confs.shape[1]}")
+
+            _log.debug(f"Executing {joint_confs.shape[0]} joint waypoints")
 
             # Validate joint_vels parameter
             if joint_vels is None:
-                joint_vels = [[0, 0, 0, 0, 0, 0, 0] ] * len(joint_confs)
-            if joint_vels is not None and len(joint_vels) != len(joint_confs):
-                raise ValueError(f"joint_vels length ({len(joint_vels)}) must match joint_confs length ({len(joint_confs)})")
+                joint_vels = np.array([[0, 0, 0, 0, 0, 0, 0]] * joint_confs.shape[0])
+            else:
+                if joint_vels.ndim != 2:
+                    raise ValueError(f"joint_vels must be 2D array, got {joint_vels.ndim}D")
+                if joint_vels.shape[1] != 7:
+                    raise ValueError(f"joint_vels must have 7 columns, got {joint_vels.shape[1]}")
+                if joint_vels.shape[0] != joint_confs.shape[0]:
+                    raise ValueError(
+                        f"joint_vels rows ({joint_vels.shape[0]}) must match joint_confs rows ({joint_confs.shape[0]})"
+                    )
 
             # Build trajectory request with all waypoints
             waypoints = []
@@ -247,15 +264,7 @@ class BambooFrankaClient:
 
             # Create each waypoint as a TimedWaypoint
             for i, joint_conf in enumerate(joint_confs):
-                if len(joint_conf) != 7:
-                    raise ValueError(f"Joint configuration {i} must have 7 values, got {len(joint_conf)}")
-
-                # Validate joint velocity if provided
-                joint_vel = None
-                if joint_vels is not None:
-                    joint_vel = joint_vels[i]
-                    if len(joint_vel) != 7:
-                        raise ValueError(f"Joint velocity {i} must have 7 values, got {len(joint_vel)}")
+                joint_vel = joint_vels[i]
 
                 # Get waypoint duration
                 waypoint_duration = durations[i] if (durations is not None and i < len(durations)) else default_duration
@@ -265,27 +274,20 @@ class BambooFrankaClient:
 
                 # Create timed waypoint
                 waypoint = {
-                    "q_goal": list(joint_conf),
-                    "velocity": list(joint_vel) if joint_vel is not None else [],
+                    "q_goal": joint_conf.tolist(),
+                    "velocity": joint_vel.tolist(),
                     "duration": waypoint_duration,
                     "kp": [600.0] * 7,  # Default stiffness
-                    "kd": [50.0] * 7,   # Default damping
+                    "kd": [50.0] * 7,  # Default damping
                 }
 
                 waypoints.append(waypoint)
 
             # Create trajectory request
-            trajectory_request = {
-                "waypoints": waypoints,
-                "default_duration": default_duration,
-                "default_velocity": []
-            }
+            trajectory_request = {"waypoints": waypoints, "default_duration": default_duration, "default_velocity": []}
 
             # Create full request
-            request = {
-                "command": "execute_trajectory",
-                "data": trajectory_request
-            }
+            request = {"command": "execute_trajectory", "data": trajectory_request}
 
             # Calculate appropriate timeout (total duration + buffer for settling + safety margin)
             # Add 2 seconds for robot settling time plus 50% safety margin
@@ -296,7 +298,9 @@ class BambooFrankaClient:
             # Temporarily set socket timeout for this trajectory
             old_timeout = self.control_socket.getsockopt(zmq.RCVTIMEO)
             self.control_socket.setsockopt(zmq.RCVTIMEO, trajectory_timeout_ms)
-            _log.debug(f"Set trajectory timeout to {trajectory_timeout_ms/1000.0:.1f}s for {total_duration:.1f}s trajectory")
+            _log.debug(
+                f"Set trajectory timeout to {trajectory_timeout_ms/1000.0:.1f}s for {total_duration:.1f}s trajectory"
+            )
 
             try:
                 # Send trajectory to control node and wait for completion
@@ -342,12 +346,7 @@ class BambooFrankaClient:
             BambooGripperError: If gripper not enabled or command fails
             BambooTimeoutError: If gripper command times out
         """
-        command = {
-            "action": "open",
-            "speed": speed,
-            "force": force,
-            "blocking": blocking
-        }
+        command = {"action": "open", "speed": speed, "force": force, "blocking": blocking}
         return self._send_gripper_command(command)
 
     def close_gripper(self, speed: float = 0.05, force: float = 0.8, blocking: bool = True) -> dict:
@@ -365,12 +364,7 @@ class BambooFrankaClient:
             BambooGripperError: If gripper not enabled or command fails
             BambooTimeoutError: If gripper command times out
         """
-        command = {
-            "action": "close",
-            "speed": speed,
-            "force": force,
-            "blocking": blocking
-        }
+        command = {"action": "close", "speed": speed, "force": force, "blocking": blocking}
         return self._send_gripper_command(command)
 
     def get_gripper_state(self) -> dict:
@@ -392,30 +386,25 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="Test Bamboo Franka Client")
-    parser.add_argument("--port", default=5555, type=int,
-                       help="Port of bamboo control node")
-    parser.add_argument("--ip", default="localhost", type=str,
-                       help="IP address of bamboo control node server")
-    parser.add_argument("--samples", default=5, type=int,
-                       help="Number of state samples to fetch")
-    parser.add_argument("--gripper-port", default=5559, type=int,
-                       help="ZMQ port of gripper server")
-    parser.add_argument("--no-gripper", action="store_true",
-                       help="Disable gripper commands")
+    parser.add_argument("--port", default=5555, type=int, help="Port of bamboo control node")
+    parser.add_argument("--ip", default="localhost", type=str, help="IP address of bamboo control node server")
+    parser.add_argument("--samples", default=5, type=int, help="Number of state samples to fetch")
+    parser.add_argument("--gripper-port", default=5559, type=int, help="ZMQ port of gripper server")
+    parser.add_argument("--no-gripper", action="store_true", help="Disable gripper commands")
     args = parser.parse_args()
 
     # Set up logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s'
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
     print(f"Testing BambooFrankaClient at {args.ip}:{args.port}")
 
     try:
-        with BambooFrankaClient(control_port=args.port, server_ip=args.ip,
-                               gripper_port=args.gripper_port,
-                               enable_gripper=not args.no_gripper) as client:
+        with BambooFrankaClient(
+            control_port=args.port,
+            server_ip=args.ip,
+            gripper_port=args.gripper_port,
+            enable_gripper=not args.no_gripper,
+        ) as client:
             print(f"\nFetching {args.samples} state samples:")
             print("-" * 60)
 
@@ -423,8 +412,10 @@ def main() -> None:
                 result = client.get_joint_states()
                 print(f"Sample {i+1}:")
                 print(f"  Joint positions: {[f'{q:.4f}' for q in result['qpos']]}")
-                print(f"  EE position: [{result['ee_pose'][0][3]:.4f}, "
-                      f"{result['ee_pose'][1][3]:.4f}, {result['ee_pose'][2][3]:.4f}]")
+                print(
+                    f"  EE position: [{result['ee_pose'][0][3]:.4f}, "
+                    f"{result['ee_pose'][1][3]:.4f}, {result['ee_pose'][2][3]:.4f}]"
+                )
                 print(f"  Gripper state: {result['gripper_state']}")
 
                 if i < args.samples - 1:
