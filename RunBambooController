@@ -136,7 +136,7 @@ start_servers() {
     # Select the control node pane by default
     tmux select-pane -t "$SESSION:0.0"
 
-    echo "✅ All servers started successfully!"
+    echo "Launched servers!"
     tmux attach -t "$SESSION"
 }
 
