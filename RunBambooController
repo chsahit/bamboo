@@ -101,6 +101,50 @@ if [[ -z "$COMMAND" ]]; then
 fi
 
 
+# Helper function to check if a port is listening
+# Returns 0 if listening, 1 if not
+check_port_listening() {
+    local port=$1
+    lsof -i ":$port" -sTCP:LISTEN -t >/dev/null 2>&1
+    return $?
+}
+
+# Helper function to verify all servers are up
+# Returns 0 if all servers are up, 1 if any are down
+verify_servers_up() {
+    local control_up=false
+    local gripper_up=false
+
+    if check_port_listening "$ROBOT_PORT"; then
+        control_up=true
+    fi
+
+    if check_port_listening "$GRIPPER_PORT"; then
+        gripper_up=true
+    fi
+
+    if $control_up && $gripper_up; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Helper function to print server status
+print_server_status() {
+    if check_port_listening "$ROBOT_PORT"; then
+        echo "  ✅ bamboo_control_node (port $ROBOT_PORT) - listening"
+    else
+        echo "  ❌ bamboo_control_node (port $ROBOT_PORT) - not responding"
+    fi
+
+    if check_port_listening "$GRIPPER_PORT"; then
+        echo "  ✅ gripper_server (port $GRIPPER_PORT) - listening"
+    else
+        echo "  ❌ gripper_server (port $GRIPPER_PORT) - not responding"
+    fi
+}
+
 start_servers() {
     # Check if session already exists
     if tmux has-session -t "$SESSION" 2>/dev/null; then
@@ -136,8 +180,34 @@ start_servers() {
     # Select the control node pane by default
     tmux select-pane -t "$SESSION:0.0"
 
-    echo "✅ All servers started successfully!"
-    tmux attach -t "$SESSION"
+    # Wait for servers to start and verify they're actually up
+    echo "Waiting for servers to start..."
+    MAX_RETRIES=30
+    RETRY_INTERVAL=0.5
+
+    for i in $(seq 1 $MAX_RETRIES); do
+        if verify_servers_up; then
+            break
+        fi
+        sleep $RETRY_INTERVAL
+    done
+
+    # Verify and report status
+    echo ""
+    if verify_servers_up; then
+        echo "✅ All servers started successfully!"
+        print_server_status
+        echo ""
+        tmux attach -t "$SESSION"
+    else
+        echo "❌ Failed to start all servers:"
+        print_server_status
+        echo ""
+        echo "The tmux session is still running. You can:"
+        echo "  - Attach to debug: tmux attach -t $SESSION"
+        echo "  - Stop servers: $0 stop"
+        return 1
+    fi
 }
 
 stop_servers() {
@@ -165,19 +235,8 @@ status_servers() {
         echo "   Attach with: tmux attach -t $SESSION"
         echo ""
 
-        # Check individual ports
         echo "Port status:"
-        if lsof -i ":$ROBOT_PORT" -sTCP:LISTEN -t >/dev/null 2>&1; then
-            echo "  ✅ bamboo_control_node (port $ROBOT_PORT) - listening"
-        else
-            echo "  ❌ bamboo_control_node (port $ROBOT_PORT) - not responding"
-        fi
-
-        if lsof -i ":$GRIPPER_PORT" -sTCP:LISTEN -t >/dev/null 2>&1; then
-            echo "  ✅ gripper_server (port $GRIPPER_PORT) - listening"
-        else
-            echo "  ❌ gripper_server (port $GRIPPER_PORT) - not responding"
-        fi
+        print_server_status
     else
         echo "❌ Session '$SESSION' is not running"
         echo "   Start with: $0 start"
