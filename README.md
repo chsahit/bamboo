@@ -126,11 +126,6 @@ Example:
 python3 gripper_server.py --gripper-port /dev/ttyUSB0 --zmq-port 5559
 ```
 
-```bash
-sudo usermod -a -G dialout $USER
-sudo usermod -a -G tty $USER
-```
-
 ### Client-Side Interface with robot and gripper
 You can verify the install by running some of the example scripts in a new terminal.
 To actuate the robot and print out its joint angles (*WARNING: THIS SCRIPT MOVES THE ROBOT WITHOUT DOING COLLISION CHECKING SO MAKE SURE THE NEARBY WORKSPACE IS CLEAR*):
