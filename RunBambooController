@@ -14,7 +14,7 @@ COMMAND=""
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --robot_addr)
+    --robot_ip)
       ROBOT_IP="$2"
       shift 2
       ;;
@@ -22,7 +22,7 @@ while [[ $# -gt 0 ]]; do
       ROBOT_PORT="$2"
       shift 2
       ;;
-    --listen_addr)
+    --listen_ip)
       LISTEN_ADDR="$2"
       shift 2
       ;;
@@ -44,16 +44,16 @@ while [[ $# -gt 0 ]]; do
       echo "  attach    - Attach to tmux session"
       echo ""
       echo "Options:"
-      echo "  --robot_addr ADDR       Robot IP address (default: $ROBOT_IP)"
-      echo "  --control_port PORT     Control node port (default: $ROBOT_PORT)"
-      echo "  --listen_addr ADDR      Listen address (default: $LISTEN_ADDR)"
+      echo "  --robot_ip  IP          Robot IP address (default: $ROBOT_IP)"
+      echo "  --control_port PORT     Control node ZMQ port (default: $ROBOT_PORT)"
+      echo "  --listen_ip IP          ZMQ server listen address (default: $LISTEN_ADDR)"
       echo "  --gripper_device DEV    Gripper device (default: $GRIPPER_DEVICE)"
-      echo "  --gripper_port PORT     Gripper server port (default: $GRIPPER_PORT)"
+      echo "  --gripper_port PORT     Gripper server ZMQ port (default: $GRIPPER_PORT)"
       echo "  --help, -h              Show this help"
       echo ""
       echo "Examples:"
-      echo "  $0 start --robot_addr 192.168.1.100 --control_port 6000"
-      echo "  $0 --listen_addr 127.0.0.1 --gripper_device /dev/ttyUSB1"
+      echo "  $0 start --robot_ip 172.16.0.2 --control_port 5555"
+      echo "  $0 --listen_ip 127.0.0.1 --gripper_device /dev/ttyUSB1"
       exit 0
       ;;
     start|stop|status|attach)
@@ -145,7 +145,7 @@ status_servers() {
     echo "Configuration:"
     echo "  Robot IP: $ROBOT_IP"
     echo "  Control port: $ROBOT_PORT"
-    echo "  Listen address: $LISTEN_ADDR"
+    echo "  Listen IP: $LISTEN_ADDR"
     echo "  Gripper device: $GRIPPER_DEVICE"
     echo "  Gripper port: $GRIPPER_PORT"
     echo ""
