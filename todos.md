@@ -11,7 +11,7 @@
 ## Will
 
 - [ ] The bamboo client should fail if it can't connect instead of failing silently and just logging warnings. Also we have try ... except Exception, it'd be nice to explicitly throw known errors if we have them from bamboo. Like there are fallbacks to gripper_state = 0.0 if read fails but I think we should raise that.
-- [ ] update README with latest install instructions, pinnochio stuff too
+- [ ] update README with latest install instructions, pinocchio stuff too
 
 ## Not important for now
  
