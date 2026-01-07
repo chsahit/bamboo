@@ -1,0 +1,183 @@
+#!/bin/bash
+
+set -eo pipefail
+
+# Directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Initialize conda so "conda activate" works non-interactively
+eval "$(conda shell.bash hook)"
+
+# Function to run commands quietly, only showing output on error
+# Usage: run_quiet "description" command arg1 arg2 ...
+run_quiet() {
+    local description="$1"
+    shift
+
+    echo -n "⏳ $description... "
+
+    # Capture output in variable
+    local output
+    if output=$("$@" 2>&1); then
+        echo "✓"
+        return 0
+    else
+        local exit_code=$?
+        echo "✗ (exit code: $exit_code)"
+        echo ""
+        echo "Command failed: $*"
+        echo "$output"
+        return $exit_code
+    fi
+}
+
+echo "==============================="
+echo "🐼 Installing Bamboo Controller "
+echo "==============================="
+
+echo "─────────────────────────────────────────"
+echo "📦 System Dependencies"
+echo "─────────────────────────────────────────"
+packages=(libzmq3-dev libmsgpack-dev libpoco-dev)
+missing_packages=()
+
+for pkg in "${packages[@]}"; do
+    if ! dpkg -s "$pkg" &> /dev/null; then
+        echo "✗ $pkg is not installed"
+        missing_packages+=("$pkg")
+    else
+        echo "✓ $pkg is already installed"
+    fi
+done
+
+if [ ${#missing_packages[@]} -gt 0 ]; then
+    echo ""
+    echo "The following packages need to be installed:"
+    printf '  - %s\n' "${missing_packages[@]}"
+    echo ""
+    echo "Will run the following command (sudo password will be requested and you will need to confirm):"
+    echo "  sudo apt-get install ${missing_packages[*]}"
+    echo ""
+    sudo apt-get install "${missing_packages[@]}"
+    echo "✓ All packages installed successfully"
+else
+    echo "✓ All required packages are already installed"
+fi
+
+# Now we need to build libfranka
+echo ""
+echo "─────────────────────────────────────────"
+echo "🔨 Cloning and Building libfranka"
+echo "─────────────────────────────────────────"
+cd "$SCRIPT_DIR"
+mkdir -p third_party
+cd third_party
+
+# Check if we need to clone
+should_clone=true
+if [ -d "libfranka" ]; then
+    echo "libfranka directory exists, checking integrity..."
+
+    # Check if valid git repo with good integrity
+    if cd libfranka 2>/dev/null && \
+       git fsck --full >/dev/null 2>&1; then
+        echo "✓ libfranka repository is intact, skipping clone"
+        should_clone=false
+        cd ..
+    else
+        echo "✗ libfranka repository is corrupted, removing..."
+        cd ..
+        rm -rf libfranka
+    fi
+fi
+
+if [ "$should_clone" = true ]; then
+    run_quiet "libfranka: git clone" git clone --recurse-submodules https://github.com/frankaemika/libfranka
+fi
+
+# Ask for version
+echo "This script builds libfranka locally and will not override any system installs."
+echo
+echo "Which libfranka version would you like to use? (e.g., 0.14.0, 0.13.0, 0.9.0)"
+echo
+echo "Please do not use the latest version unless you have checked compatibility."
+echo "libfranka must match your robot firmware:"
+echo "  https://frankarobotics.github.io/docs/libfranka/docs/compatibility_with_images.html"
+echo
+echo "If you want to check what you already have in other projects, run:"
+echo "  locate libfranka.so"
+echo
+read -rp "Enter libfranka version: " version
+
+# TODO: if >= 0.14.0 need to make sure Pinnochio is installed
+
+# Checkout version and build it (doesn't hurt to build it again even if already built)
+cd libfranka
+run_quiet "libfranka: git checkout ${version}" git checkout "${version}"
+run_quiet "libfranka: git submodule update" git submodule update
+
+mkdir -p build
+cd build
+run_quiet "libfranka: cmake configure" cmake .. -DCMAKE_INSTALL_PREFIX="$SCRIPT_DIR/install" -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/opt/openrobots/lib/cmake
+run_quiet "libfranka: build" make -j"$(nproc)"
+run_quiet "libfranka: install" make install
+echo "✓ libfranka installation complete!"
+echo "Installation directory: $SCRIPT_DIR/install"
+
+# Now we install bamboo!
+echo ""
+echo "─────────────────────────────────────────"
+echo "🔨 Building Bamboo Controller"
+echo "─────────────────────────────────────────"
+# Check if conda is available
+if ! command -v conda &> /dev/null; then
+    echo "✗ Error: conda is not installed or not in PATH"
+    exit 1
+fi
+
+# Python environment required for gripper control
+env_name="bamboo"
+
+# Loop until we have a valid environment (existing and confirmed, or new)
+while true; do
+    if conda env list | grep -qE "^${env_name}\s"; then
+        echo "Conda environment '$env_name' already exists."
+
+        # Keep asking until we get y or n
+        while true; do
+            read -rp "Do you want to use this environment? (y/n): " use_existing
+            if [[ "$use_existing" =~ ^[Yy]$ ]]; then
+                echo "✓ Using existing environment '$env_name'"
+                break 2  # Break out of both loops
+            elif [[ "$use_existing" =~ ^[Nn]$ ]]; then
+                read -rp "Enter a different environment name: " env_name
+                break  # Break inner loop to check if new name exists
+            else
+                echo "Please enter 'y' or 'n'"
+            fi
+        done
+    else
+        echo "Creating conda environment '$env_name'..."
+        conda create -n "$env_name" python=3.10 -y
+        echo "✓ Conda environment '$env_name' created"
+        break
+    fi
+done
+
+# Now activate environment and install Bamboo with server dependencies
+conda activate "$env_name"
+run_quiet "bamboo: installing Python package with server dependencies" pip install -e "$SCRIPT_DIR[server]"
+
+# Deal with the C++ build
+BUILD_DIR="$SCRIPT_DIR/controller/build"
+if [ ! -d "$BUILD_DIR" ]; then
+    echo "Creating build directory: $BUILD_DIR"
+    mkdir -p "$BUILD_DIR"
+fi
+
+cd "$BUILD_DIR"
+run_quiet "bamboo: cmake configure" cmake ..
+run_quiet "bamboo: build" make -j"$(nproc)"
+
+echo ""
+echo "🎉 Bamboo Controller installation complete!"

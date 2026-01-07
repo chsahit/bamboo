@@ -5,18 +5,20 @@ Gripper Server - Controls Robotiq gripper hardware via ZMQ messages.
 This runs on the robot computer and receives commands from remote BambooFrankaClients.
 """
 
-import json
+import argparse
 import logging
 import time
+
+import msgpack
 import zmq
-import argparse
-from third_party.robotiq_gripper_client import RobotiqGripperClient
+
+from controller.third_party.robotiq_gripper_client import RobotiqGripperClient
 
 
 class GripperServer:
     """ZMQ server that controls Robotiq gripper hardware."""
 
-    def __init__(self, gripper_port: str = "/dev/ttyUSB0", zmq_port: int = 5558):
+    def __init__(self, gripper_port: str = "/dev/ttyUSB0", zmq_port: int = 5559):
         """Initialize Gripper Server.
 
         Args:
@@ -42,7 +44,7 @@ class GripperServer:
 
         self.running = True
 
-    def _spin_until_done(self, timeout: float=5.0) -> None:
+    def _spin_until_done(self, timeout: float = 5.0) -> None:
         done_time = time.time() + timeout
         while time.time() < done_time:
             time.sleep(0.02)  # poll at 50 Hz
@@ -61,31 +63,31 @@ class GripperServer:
             Dict with response
         """
         try:
-            action = command.get('action')
+            action = command.get("action")
             print(f"{action=}")
 
-            if action == 'open':
-                speed = command.get('speed', 0.05)
-                force = command.get('force', 0.1)
+            if action == "open":
+                speed = command.get("speed", 0.05)
+                force = command.get("force", 0.1)
                 max_gripper_width = 0.085
                 success = self.gripper.apply_gripper_command(width=max_gripper_width, speed=speed, force=force)
-                if command.get('blocking', True):
+                if command.get("blocking", True):
                     success = self._spin_until_done()
                 return {"success": success}
 
-            elif action == 'close':
-                speed = command.get('speed', 0.05)
-                force = command.get('force', 0.1)
+            elif action == "close":
+                speed = command.get("speed", 0.05)
+                force = command.get("force", 0.1)
                 success = self.gripper.apply_gripper_command(width=0.0, speed=speed, force=force)
-                if command.get('blocking', True):
+                if command.get("blocking", True):
                     success = self._spin_until_done()
                 return {"success": success}
 
-            elif action == 'get_state':
+            elif action == "get_state":
                 state = self.gripper.get_gripper_state()
                 return {"success": True, "state": state}
 
-            elif action == 'shutdown':
+            elif action == "shutdown":
                 self.running = False
                 return {"success": True, "message": "Server shutting down"}
 
@@ -104,20 +106,20 @@ class GripperServer:
             while self.running:
                 # Wait for request (with timeout)
                 try:
-                    message = self.socket.recv_string(zmq.NOBLOCK)
+                    message = self.socket.recv(zmq.NOBLOCK)
                     print("MESSAGE RECEIVED")
 
                     # Parse command
                     try:
-                        command = json.loads(message)
-                    except json.JSONDecodeError:
-                        response = {"success": False, "error": "Invalid JSON"}
+                        command = msgpack.unpackb(message, raw=False)
+                    except (msgpack.exceptions.ExtraData, msgpack.exceptions.UnpackException):
+                        response = {"success": False, "error": "Invalid msgpack"}
                     else:
                         print(f"{command=}")
                         response = self.handle_command(command)
 
                     # Send response
-                    self.socket.send_string(json.dumps(response))
+                    self.socket.send(msgpack.packb(response))
 
                 except zmq.Again:
                     # No message received, continue
@@ -132,28 +134,22 @@ class GripperServer:
     def cleanup(self) -> None:
         """Clean up resources."""
         logging.info("Cleaning up gripper server...")
-        if hasattr(self, 'socket'):
+        if hasattr(self, "socket"):
             self.socket.close()
-        if hasattr(self, 'context'):
+        if hasattr(self, "context"):
             self.context.term()
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Gripper Server for Robotiq control")
-    parser.add_argument("--gripper-port", default="/dev/ttyUSB0", type=str,
-                       help="Serial port for Robotiq gripper")
-    parser.add_argument("--zmq-port", default=5559, type=int,
-                       help="ZMQ port to listen on")
-    parser.add_argument("--verbose", "-v", action="store_true",
-                       help="Enable verbose logging")
+    parser.add_argument("--gripper-port", default="/dev/ttyUSB0", type=str, help="Serial port for Robotiq gripper")
+    parser.add_argument("--zmq-port", default=5559, type=int, help="ZMQ port to listen on")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
     args = parser.parse_args()
 
     # Set up logging
     log_level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(
-        level=log_level,
-        format='%(asctime)s - %(levelname)s - %(message)s'
-    )
+    logging.basicConfig(level=log_level, format="%(asctime)s - %(levelname)s - %(message)s")
 
     print("=" * 60)
     print("Starting Gripper Server")
@@ -162,10 +158,7 @@ def main() -> int:
     print("=" * 60)
 
     try:
-        server = GripperServer(
-            gripper_port=args.gripper_port,
-            zmq_port=args.zmq_port
-        )
+        server = GripperServer(gripper_port=args.gripper_port, zmq_port=args.zmq_port)
         server.run()
     except Exception as e:
         logging.error(f"Failed to start gripper server: {e}")

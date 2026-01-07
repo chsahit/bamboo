@@ -28,73 +28,8 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-.python-version
-
-# pipenv
-#Pipfile.lock
-
 # PEP 582
 __pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
 
 # Environments
 .env
@@ -105,23 +40,10 @@ ENV/
 env.bak/
 venv.bak/
 
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
 # mypy
 .mypy_cache/
 .dmypy.json
 dmypy.json
-
-# Pyre type checker
-.pyre/
 
 # C++ build artifacts
 build/
@@ -149,38 +71,5 @@ Makefile
 ehthumbs.db
 Thumbs.db
 
-# Project specific
-# Build directories
-minimal_joint_impedance/build/
-bamboo/build/
-
-# External dependencies
-libfranka/
-deoxys_control/
-protobuf/
-zmqpp/
-
-# Generated protobuf files (C++ only - keep Python files tracked)
-# bamboo/proto_gen/  # Allow Python protobuf files to be tracked
-# *_pb2.py          # Allow Python protobuf files to be tracked
-# *_pb2_grpc.py     # Allow Python protobuf files to be tracked
-
-# Robot logs and data
-*.log
-*.csv
-*.bag
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-
-# Backup files
-*.bak
-*.backup
-
-# Local configuration
-local_config.yaml
-robot_config.yaml
-
-third_party/grpc
+# libfranka
+controller/third_party/libfranka/
