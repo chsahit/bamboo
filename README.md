@@ -75,7 +75,7 @@ pip install -e .[server]
 
 ### Server-Side Robot Control
 
-**Security Warning:** By default, the controller listens on all network interfaces (`*`), accepting commands from any IP address that can reach the machine. For security, consider restricting access by setting the 'listen address' 
+**Security Warning:** By default, the controller listens on all network interfaces (`*` or `0.0.0.0`), accepting commands from any IP address that can reach the machine. For security, consider restricting access by setting the listen address using the `--listen_ip` flag in `RunBambooController` (or the equivalent configuration option): for example, use `127.0.0.1` to accept commands only from the local machine, or a specific interface address such as `192.168.1.10` to accept commands only from that network. Avoid using `*`/`0.0.0.0` on untrusted or publicly accessible networks unless you have additional protections in place (VPN, firewall, etc.).
 
 **Easy Start (Recommended):** Use the provided script to start both control node and gripper server in tmux:
 
