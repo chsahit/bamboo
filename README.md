@@ -19,15 +19,23 @@ Install the control node on the real-time control machine that is directly conne
 ```bash
 bash InstallBambooController
 ```
-You will be prompted to enter the version of libfranka to install. This can be determined by checking the FCI version in the Franka Desk (under Settings > Dashboard > Control) and then consulting the [FCI Compatability Table](https://frankarobotics.github.io/docs/compatibility.html) for a compatible 
-`libfranka` version. 
 
-**Note:** The `InstallBambooController` script will automatically handle:
+**Note:** This script builds `libfranka` locally and **will not override any system installations**. The installation script may request sudo privileges to add user groups and install system packages. You will be prompted before any sudo commands are executed.
+
+You will also be prompted to enter the version of libfranka to install. This can be determined by:
+- Checking the FCI version in the Franka Desk (under Settings > Dashboard > Control) and then consulting the [FCI Compatability Table](https://frankarobotics.github.io/docs/compatibility.html) for a compatible `libfranka` version
+- Checking what libfranka versions you already have in other projects, you could run:
+  ```bash
+  locate libfranka.so
+  ``` 
+
+The `InstallBambooController` script will automatically handle:
+
 - Adding your user to required groups (`realtime` for real-time kernel operations, `dialout` and `tty` for serial communication with Robotiq gripper)
 - Installing system packages (`libzmq3-dev` for ZMQ networking, `libmsgpack-dev` for message serialization, `libpoco-dev` for Franka dependencies)
 - Cloning and building `libfranka`
 
-If groups are added during installation, **you must log out and log back in** before running the controller.
+**Important:** If groups are added during installation, **you must log out and log back in** before running the controller.
 
 ### Manual Installation
 
