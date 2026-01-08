@@ -36,6 +36,62 @@ echo "🐼 Installing Bamboo Controller "
 echo "==============================="
 
 echo "─────────────────────────────────────────"
+echo "👥 User Groups"
+echo "─────────────────────────────────────────"
+echo "Checking required user groups..."
+echo "  • realtime: Required for real-time kernel operations and robot control"
+echo "  • dialout:  Required for serial communication with Robotiq gripper"
+echo "  • tty:      Required for serial communication with Robotiq gripper"
+echo ""
+
+# Check which groups the user is in
+current_groups=$(groups "$USER")
+missing_groups=()
+NEEDS_LOGOUT=false
+
+for group in realtime dialout tty; do
+    if echo "$current_groups" | grep -qw "$group"; then
+        echo "✓ User '$USER' is in group '$group'"
+    else
+        echo "✗ User '$USER' is NOT in group '$group'"
+        missing_groups+=("$group")
+    fi
+done
+
+if [ ${#missing_groups[@]} -gt 0 ]; then
+    echo ""
+    echo "The following groups need to be added for user '$USER':"
+    printf '  - %s\n' "${missing_groups[@]}"
+    echo ""
+
+    # Join missing_groups array into comma-separated string
+    groups_str=$(IFS=,; echo "${missing_groups[*]}")
+
+    echo "Will run the following command (sudo password will be requested):"
+    echo "  sudo usermod -a -G $groups_str $USER"
+    echo ""
+
+    # Ask for confirmation
+    while true; do
+        read -rp "Do you want to proceed? (y/n): " proceed
+        if [[ "$proceed" =~ ^[Yy]$ ]]; then
+            sudo usermod -a -G "$groups_str" "$USER"
+            echo "✓ Added '$USER' to groups: $groups_str"
+            NEEDS_LOGOUT=true
+            break
+        elif [[ "$proceed" =~ ^[Nn]$ ]]; then
+            echo "✗ Skipping group addition. Note: You will need to add these groups manually to run the controller."
+            break
+        else
+            echo "Please enter 'y' or 'n'"
+        fi
+    done
+else
+    echo "✓ User is already in all required groups"
+fi
+
+echo ""
+echo "─────────────────────────────────────────"
 echo "📦 System Dependencies"
 echo "─────────────────────────────────────────"
 packages=(libzmq3-dev libmsgpack-dev libpoco-dev)
@@ -55,11 +111,26 @@ if [ ${#missing_packages[@]} -gt 0 ]; then
     echo "The following packages need to be installed:"
     printf '  - %s\n' "${missing_packages[@]}"
     echo ""
-    echo "Will run the following command (sudo password will be requested and you will need to confirm):"
+    echo "Will run the following command (sudo password will be requested):"
     echo "  sudo apt-get install ${missing_packages[*]}"
     echo ""
-    sudo apt-get install "${missing_packages[@]}"
-    echo "✓ All packages installed successfully"
+
+    # Ask for confirmation
+    while true; do
+        read -rp "Do you want to proceed? (y/n): " proceed
+        if [[ "$proceed" =~ ^[Yy]$ ]]; then
+            sudo apt-get install "${missing_packages[@]}"
+            echo "✓ All packages installed successfully"
+            break
+        elif [[ "$proceed" =~ ^[Nn]$ ]]; then
+            echo "✗ Skipping package installation. Note: These packages are required for building the controller."
+            echo ""
+            echo "Installation cannot continue without these packages."
+            exit 1
+        else
+            echo "Please enter 'y' or 'n'"
+        fi
+    done
 else
     echo "✓ All required packages are already installed"
 fi
@@ -109,7 +180,41 @@ echo "  locate libfranka.so"
 echo
 read -rp "Enter libfranka version: " version
 
-# TODO: if >= 0.14.0 need to make sure Pinnochio is installed
+# Check if Pinocchio is required (libfranka >= 0.14.0)
+# Parse version string to compare
+version_major=$(echo "$version" | cut -d. -f1)
+version_minor=$(echo "$version" | cut -d. -f2)
+
+if [ "$version_major" -eq 0 ] && [ "$version_minor" -ge 14 ]; then
+    echo ""
+    echo "─────────────────────────────────────────"
+    echo "📦 Checking Pinocchio"
+    echo "(required for libfranka >= 0.14.0)"
+    echo "─────────────────────────────────────────"
+
+    # Check if pinocchio is installed via pkg-config
+    pinocchio_found=false
+    if pkg-config --exists pinocchio 2>/dev/null; then
+        pinocchio_version=$(pkg-config --modversion pinocchio)
+        echo "✓ Pinocchio $pinocchio_version found via pkg-config"
+        pinocchio_found=true
+    elif [ -d "/opt/openrobots/lib/cmake/pinocchio" ]; then
+        echo "✓ Pinocchio found in /opt/openrobots"
+        pinocchio_found=true
+    fi
+
+    if [ "$pinocchio_found" = false ]; then
+        echo "✗ Pinocchio is NOT installed"
+        echo ""
+        echo "ERROR: libfranka $version requires Pinocchio to be installed."
+        echo ""
+        echo "Please follow the installation instructions at:"
+        echo "  https://github.com/frankarobotics/libfranka/tree/release-0.15.2?tab=readme-ov-file#2-installing-dependencies"
+        echo ""
+        echo "After installing Pinocchio, run this script again."
+        exit 1
+    fi
+fi
 
 # Checkout version and build it (doesn't hurt to build it again even if already built)
 cd libfranka
@@ -150,13 +255,25 @@ while true; do
                 echo "✓ Using existing environment '$env_name'"
                 break 2  # Break out of both loops
             elif [[ "$use_existing" =~ ^[Nn]$ ]]; then
-                read -rp "Enter a different environment name: " env_name
+                while true; do
+                    read -rp "Enter a different environment name: " env_name
+                    if [ -z "$env_name" ]; then
+                        echo "Error: Environment name cannot be empty. Please try again."
+                    else
+                        break
+                    fi
+                done
                 break  # Break inner loop to check if new name exists
             else
                 echo "Please enter 'y' or 'n'"
             fi
         done
     else
+        if [ -z "$env_name" ]; then
+            echo "Error: Environment name cannot be empty."
+            read -rp "Enter a valid environment name: " env_name
+            continue
+        fi
         echo "Creating conda environment '$env_name'..."
         conda create -n "$env_name" python=3.10 -y
         echo "✓ Conda environment '$env_name' created"
@@ -175,9 +292,28 @@ if [ ! -d "$BUILD_DIR" ]; then
     mkdir -p "$BUILD_DIR"
 fi
 
+# Temporarily add /opt/openrobots/lib to LD_LIBRARY_PATH for the build
+# This is needed if libfranka was built with Pinocchio
+if [ -d "/opt/openrobots/lib" ]; then
+    export LD_LIBRARY_PATH="/opt/openrobots/lib:$LD_LIBRARY_PATH"
+fi
+
 cd "$BUILD_DIR"
 run_quiet "bamboo: cmake configure" cmake ..
 run_quiet "bamboo: build" make -j"$(nproc)"
 
 echo ""
 echo "🎉 Bamboo Controller installation complete!"
+echo ""
+
+if [ "$NEEDS_LOGOUT" = true ]; then
+    echo "⚠️  ══════════════════════════════════════════════════════════════════"
+    echo "⚠️  IMPORTANT: You were added to new user groups during installation."
+    echo "⚠️  "
+    echo "⚠️  You MUST log out and log back in before running the controller!"
+    echo "⚠️  "
+    echo "⚠️  The group changes (realtime, dialout, tty) will not take effect"
+    echo "⚠️  until you start a new session."
+    echo "⚠️  ══════════════════════════════════════════════════════════════════"
+    echo ""
+fi

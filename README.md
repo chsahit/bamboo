@@ -1,6 +1,6 @@
 # Bamboo Franka Controller
 
-A lightweight package for controlling the Franka Emika FR3 and Panda with joint impedance control. 
+A lightweight package for controlling the Franka Emika FR3 and Panda with joint impedance control and controlling Robotiq grippers. 
 
 A single real-time controller machine runs the control node and maintains the real-time link with the FR3/Panda.
 Other machines can connect to this node using the Bamboo client via ZMQ to issue commands or receive robot state.
@@ -10,42 +10,38 @@ Other machines can connect to this node using the Bamboo client via ZMQ to issue
 Install the control node on the real-time control machine that is directly connected to the Franka robot.
 
 ### Prerequisites
-Ensure that the system satisfies the [`libfranka` system requirements](https://github.com/frankarobotics/libfranka/tree/release-0.15.2?tab=readme-ov-file#1-system-requirements) and that the the [`libfranka` dependencies](https://github.com/frankarobotics/libfranka/tree/release-0.15.2?tab=readme-ov-file#1-system-requirements) are installed. 
 
-Next, install `zmq` and related dependencies with
-```bash
-sudo apt install libzmq3-dev libmsgpack-dev libpoco-dev
-```
-
-These steps may require administrator privileges.
-
-Make sure that the user is in the realtime group and can read over USB interfaces with `sudo usermod -a -G realtime,dialout,tty $USER`. 
-
-You do not need to install `libfranka` yourself — the included `InstallBambooController` script will clone, build, and set up libfranka.
+1. Ensure that the [`libfranka` system requirements](https://github.com/frankarobotics/libfranka/tree/release-0.15.2?tab=readme-ov-file#1-system-requirements) are satisfied
+2. Ensure that the [`libfranka` dependencies](https://github.com/frankarobotics/libfranka/tree/release-0.15.2?tab=readme-ov-file#1-system-requirements) are installed
+3. **If using libfranka >= 0.14.0:** Install Pinocchio following the [libfranka dependency instructions](https://github.com/frankarobotics/libfranka/tree/release-0.15.2?tab=readme-ov-file#2-installing-dependencies) before running the installation script
+4. Make sure you have set the inertial parameters for the Robotiq gripper in Franka Desk. You can follow the [instructions in DROID](https://droid-dataset.github.io/droid/software-setup/host-installation.html#updating-inertia-parameters-for-robotiq-gripper) for doing this.
 
 ### Build Controller
 ```bash
+# Follow the instructions in the script
 bash InstallBambooController
 ```
-You will be prompted to enter the version of libfranka to install. This can be determined by checking the FCI version in the Franka Desk (under Settings > Dashboard > Control) and then consulting the [FCI Compatability Table](https://frankarobotics.github.io/docs/compatibility.html) for a compatible `libfranka` version. 
 
+**Note:** This script builds `libfranka` locally and **will not override any system installations**. The installation script may request sudo privileges to add user groups and install system packages. You will be prompted before any sudo commands are executed.
 
-### Install Python Package
+You will also be prompted to enter the version of libfranka to install. This can be determined by:
+- Checking the FCI version in the Franka Desk (under Settings > Dashboard > Control) and then consulting the [FCI Compatability Table](https://frankarobotics.github.io/docs/compatibility.html) for a compatible `libfranka` version
+- Checking what libfranka versions you already have in other projects, you could run:
+  ```bash
+  locate libfranka.so
+  ``` 
 
-The `InstallBambooController` script handles this automatically with server dependencies included. If you need to install manually:
+The `InstallBambooController` script will automatically handle:
 
-```bash
-conda create -n bamboo python=3.10
-conda activate bamboo
-pip install -e .[server]
-```
+- Adding your user to required groups (`realtime` for real-time kernel operations, `dialout` and `tty` for serial communication with Robotiq gripper)
+- Installing system packages (`libzmq3-dev` for ZMQ networking, `libmsgpack-dev` for message serialization, `libpoco-dev` for Franka dependencies)
+- Cloning and building `libfranka`
 
-### Compile Controller
-```bash
-mkdir controller/build && cd controller/build
-cmake ..
-make
-```
+**Important:** If groups are added during installation, **you must log out and log back in** before running the controller.
+
+### Manual Installation
+
+If you prefer to install manually, refer to the steps in the [`InstallBambooController`](InstallBambooController) script.
 
 ## Bamboo Client Installation
 
@@ -65,7 +61,7 @@ cd bamboo
 pip install -e .
 ```
 
-**If you need gripper server dependencies** (pyserial, pymodbus) on a non-control node machine:
+**If you need Robotiq gripper server dependencies** (pyserial, pymodbus) on a non-control node machine:
 
 ```bash
 pip install -e .[server]
@@ -104,7 +100,6 @@ Other commands:
 **Manual Start:** If you need to run servers manually, first run the C++ control node:
 
 ```bash
-conda activate bamboo
 cd controller/build
 ./bamboo_control_node -r <robot-ip> -p <zmq-port> [-l <listen-address>]
 ```
@@ -114,16 +109,16 @@ Example:
 ./bamboo_control_node -r 172.16.0.2 -p 5555 -l "*"
 ```
 
-Then in a new terminal, launch the gripper server:
+Then in a new terminal, launch the Robotiq gripper server:
 ```bash
 conda activate bamboo
 cd controller
-python3 gripper_server.py --gripper-port <gripper-device> --zmq-port <zmq-port>
+python gripper_server.py --gripper-port <gripper-device> --zmq-port <zmq-port>
 ```
 
 Example:
 ```bash
-python3 gripper_server.py --gripper-port /dev/ttyUSB0 --zmq-port 5559
+python gripper_server.py --gripper-port /dev/ttyUSB0 --zmq-port 5559
 ```
 
 ### Client-Side Interface with robot and gripper

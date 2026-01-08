@@ -10,9 +10,6 @@
 
 ## Will
 
-- [ ] The bamboo client should fail if it can't connect instead of failing silently and just logging warnings. Also we have try ... except Exception, it'd be nice to explicitly throw known errors if we have them from bamboo. Like there are fallbacks to gripper_state = 0.0 if read fails but I think we should raise that.
-- [ ] update README with latest install instructions, pinocchio stuff too
-
 ## Not important for now
  
 - [x] Seems like gripper still uses JSON instead of msgpack (Sahit did on another PR)
@@ -34,3 +31,5 @@
 - [x] Claude still has protobuf/grpc mentions lmao: https://github.com/chsahit/bamboo/blob/main/bamboo/CMakeLists.txt#L34
 - [x] In bamboo/__init__.py can we load the version from the importlib.metadata that's defined in pyproject.toml so when we upgrade versions there's only one place to do it
 - [x] Default gripper port to 5559 to match our other docs? https://github.com/chsahit/bamboo/blob/main/bamboo/gripper_server.py#L19
+- [x] The bamboo client should fail if it can't connect instead of failing silently and just logging warnings. Also we have try ... except Exception, it'd be nice to explicitly throw known errors if we have them from bamboo. Like there are fallbacks to gripper_state = 0.0 if read fails but I think we should raise that.
+- [x] update README with latest install instructions, pinocchio stuff too
