@@ -14,9 +14,11 @@ Install the control node on the real-time control machine that is directly conne
 1. Ensure that the [`libfranka` system requirements](https://github.com/frankarobotics/libfranka/tree/release-0.15.2?tab=readme-ov-file#1-system-requirements) are satisfied
 2. Ensure that the [`libfranka` dependencies](https://github.com/frankarobotics/libfranka/tree/release-0.15.2?tab=readme-ov-file#1-system-requirements) are installed
 3. **If using libfranka >= 0.14.0:** Install Pinocchio following the [libfranka dependency instructions](https://github.com/frankarobotics/libfranka/tree/release-0.15.2?tab=readme-ov-file#2-installing-dependencies) before running the installation script
+4. Make sure you have set the inertial parameters for the Robotiq gripper in Franka Desk. You can follow the [instructions in DROID](https://droid-dataset.github.io/droid/software-setup/host-installation.html#updating-inertia-parameters-for-robotiq-gripper) for doing this.
 
 ### Build Controller
 ```bash
+# Follow the instructions in the script
 bash InstallBambooController
 ```
 
