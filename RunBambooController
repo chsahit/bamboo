@@ -118,7 +118,13 @@ start_servers() {
     echo "Creating tmux session with multiple panes..."
 
     # Create new session with first pane for arm control node.
-    tmux new-session -d -s "$SESSION" -n "servers" bash -c "cd \"$SCRIPT_DIR/controller/build/\" && ./bamboo_control_node -r \"$ROBOT_IP\" -p \"$ROBOT_PORT\" -l \"$LISTEN_ADDR\"; read"
+    # Prepend /opt/openrobots/lib to LD_LIBRARY_PATH if it exists and isn't already present
+    if [ -d /opt/openrobots/lib ] && [[ ":$LD_LIBRARY_PATH:" != *":/opt/openrobots/lib:"* ]]; then
+        BAMBOO_LD_PATH="/opt/openrobots/lib:$LD_LIBRARY_PATH"
+    else
+        BAMBOO_LD_PATH="$LD_LIBRARY_PATH"
+    fi
+    tmux new-session -d -s "$SESSION" -n "servers" bash -c "cd \"$SCRIPT_DIR/controller/build/\" && LD_LIBRARY_PATH=\"$BAMBOO_LD_PATH\" ./bamboo_control_node -r \"$ROBOT_IP\" -p \"$ROBOT_PORT\" -l \"$LISTEN_ADDR\"; read"
 
     # Split horizontally to create gripper pane
     tmux split-window -h -p 50 -t "$SESSION:0"
