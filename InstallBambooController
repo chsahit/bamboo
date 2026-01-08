@@ -264,6 +264,12 @@ if [ ! -d "$BUILD_DIR" ]; then
     mkdir -p "$BUILD_DIR"
 fi
 
+# Temporarily add /opt/openrobots/lib to LD_LIBRARY_PATH for the build
+# This is needed if libfranka was built with Pinocchio
+if [ -d "/opt/openrobots/lib" ]; then
+    export LD_LIBRARY_PATH="/opt/openrobots/lib:$LD_LIBRARY_PATH"
+fi
+
 cd "$BUILD_DIR"
 run_quiet "bamboo: cmake configure" cmake ..
 run_quiet "bamboo: build" make -j"$(nproc)"
