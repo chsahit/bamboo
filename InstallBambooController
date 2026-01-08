@@ -63,16 +63,29 @@ if [ ${#missing_groups[@]} -gt 0 ]; then
     echo "The following groups need to be added for user '$USER':"
     printf '  - %s\n' "${missing_groups[@]}"
     echo ""
-    echo "Will run the following command(s) (sudo password will be requested):"
-    for group in "${missing_groups[@]}"; do
-        echo "  sudo usermod -a -G $group $USER"
-    done
+
+    # Join missing_groups array into comma-separated string
+    groups_str=$(IFS=,; echo "${missing_groups[*]}")
+
+    echo "Will run the following command (sudo password will be requested):"
+    echo "  sudo usermod -a -G $groups_str $USER"
     echo ""
-    for group in "${missing_groups[@]}"; do
-        sudo usermod -a -G "$group" "$USER"
-        echo "✓ Added '$USER' to group '$group'"
+
+    # Ask for confirmation
+    while true; do
+        read -rp "Do you want to proceed? (y/n): " proceed
+        if [[ "$proceed" =~ ^[Yy]$ ]]; then
+            sudo usermod -a -G "$groups_str" "$USER"
+            echo "✓ Added '$USER' to groups: $groups_str"
+            NEEDS_LOGOUT=true
+            break
+        elif [[ "$proceed" =~ ^[Nn]$ ]]; then
+            echo "✗ Skipping group addition. Note: You will need to add these groups manually to run the controller."
+            break
+        else
+            echo "Please enter 'y' or 'n'"
+        fi
     done
-    NEEDS_LOGOUT=true
 else
     echo "✓ User is already in all required groups"
 fi
@@ -98,11 +111,26 @@ if [ ${#missing_packages[@]} -gt 0 ]; then
     echo "The following packages need to be installed:"
     printf '  - %s\n' "${missing_packages[@]}"
     echo ""
-    echo "Will run the following command (sudo password will be requested and you will need to confirm):"
+    echo "Will run the following command (sudo password will be requested):"
     echo "  sudo apt-get install ${missing_packages[*]}"
     echo ""
-    sudo apt-get install "${missing_packages[@]}"
-    echo "✓ All packages installed successfully"
+
+    # Ask for confirmation
+    while true; do
+        read -rp "Do you want to proceed? (y/n): " proceed
+        if [[ "$proceed" =~ ^[Yy]$ ]]; then
+            sudo apt-get install "${missing_packages[@]}"
+            echo "✓ All packages installed successfully"
+            break
+        elif [[ "$proceed" =~ ^[Nn]$ ]]; then
+            echo "✗ Skipping package installation. Note: These packages are required for building the controller."
+            echo ""
+            echo "Installation cannot continue without these packages."
+            exit 1
+        else
+            echo "Please enter 'y' or 'n'"
+        fi
+    done
 else
     echo "✓ All required packages are already installed"
 fi
