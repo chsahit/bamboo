@@ -39,7 +39,7 @@ The `InstallBambooController` script will automatically handle:
 
 ### Manual Installation
 
-Refer to the steps in the [`InstallBambooController`](InstallBambooController) for installing Bamboo manually.
+If you prefer to install manually, refer to the steps in the [`InstallBambooController`](InstallBambooController) script.
 
 ## Bamboo Client Installation
 
