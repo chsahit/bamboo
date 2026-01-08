@@ -36,6 +36,49 @@ echo "🐼 Installing Bamboo Controller "
 echo "==============================="
 
 echo "─────────────────────────────────────────"
+echo "👥 User Groups"
+echo "─────────────────────────────────────────"
+echo "Checking required user groups..."
+echo "  • realtime: Required for real-time kernel operations and robot control"
+echo "  • dialout:  Required for serial communication with Robotiq gripper"
+echo "  • tty:      Required for serial communication with Robotiq gripper"
+echo ""
+
+# Check which groups the user is in
+current_groups=$(groups "$USER")
+missing_groups=()
+NEEDS_LOGOUT=false
+
+for group in realtime dialout tty; do
+    if echo "$current_groups" | grep -qw "$group"; then
+        echo "✓ User '$USER' is in group '$group'"
+    else
+        echo "✗ User '$USER' is NOT in group '$group'"
+        missing_groups+=("$group")
+    fi
+done
+
+if [ ${#missing_groups[@]} -gt 0 ]; then
+    echo ""
+    echo "The following groups need to be added for user '$USER':"
+    printf '  - %s\n' "${missing_groups[@]}"
+    echo ""
+    echo "Will run the following command(s) (sudo password will be requested):"
+    for group in "${missing_groups[@]}"; do
+        echo "  sudo usermod -a -G $group $USER"
+    done
+    echo ""
+    for group in "${missing_groups[@]}"; do
+        sudo usermod -a -G "$group" "$USER"
+        echo "✓ Added '$USER' to group '$group'"
+    done
+    NEEDS_LOGOUT=true
+else
+    echo "✓ User is already in all required groups"
+fi
+
+echo ""
+echo "─────────────────────────────────────────"
 echo "📦 System Dependencies"
 echo "─────────────────────────────────────────"
 packages=(libzmq3-dev libmsgpack-dev libpoco-dev)
@@ -181,3 +224,16 @@ run_quiet "bamboo: build" make -j"$(nproc)"
 
 echo ""
 echo "🎉 Bamboo Controller installation complete!"
+echo ""
+
+if [ "$NEEDS_LOGOUT" = true ]; then
+    echo "⚠️  ══════════════════════════════════════════════════════════════════"
+    echo "⚠️  IMPORTANT: You were added to new user groups during installation."
+    echo "⚠️  "
+    echo "⚠️  You MUST log out and log back in before running the controller!"
+    echo "⚠️  "
+    echo "⚠️  The group changes (realtime, dialout, tty) will not take effect"
+    echo "⚠️  until you start a new session."
+    echo "⚠️  ══════════════════════════════════════════════════════════════════"
+    echo ""
+fi
