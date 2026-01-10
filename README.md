@@ -101,8 +101,15 @@ Other commands:
 
 ```bash
 cd controller/build
-./bamboo_control_node -r <robot-ip> -p <zmq-port> [-l <listen-address>]
+./bamboo_control_node -r <robot-ip> -p <zmq-port> [-l <listen-address>] [-m]
 ```
+
+Available flags:
+- `-r`: Robot IP address (required)
+- `-p`: Port number (required)
+- `-l`: Listen address (default: * for all interfaces)
+- `-m`: Use min-jerk interpolation (default: linear)
+- `-h`: Show help
 
 Example:
 ```bash

@@ -1,5 +1,5 @@
-#ifndef BAMBOO_MIN_JERK_INTERPOLATOR_H_
-#define BAMBOO_MIN_JERK_INTERPOLATOR_H_
+#ifndef BAMBOO_JOINT_INTERPOLATOR_H_
+#define BAMBOO_JOINT_INTERPOLATOR_H_
 
 #include <Eigen/Dense>
 #include <algorithm>
@@ -8,7 +8,12 @@
 namespace bamboo {
 namespace interpolators {
 
-class MinJerkInterpolator {
+enum class InterpolatorType {
+  kLinear,
+  kMinJerk
+};
+
+class JointInterpolator {
 private:
   using Vector7d = Eigen::Matrix<double, 7, 1>;
   using Vector7i = Eigen::Matrix<int, 7, 1>;
@@ -29,14 +34,14 @@ private:
   double start_time_;
   bool start_;
   bool first_goal_;
-  bool do_min_jerk_;
+  InterpolatorType interpolator_;
 
 public:
-  inline MinJerkInterpolator()
+  inline JointInterpolator(InterpolatorType interpolator = InterpolatorType::kLinear)
       : dt_(0.), last_time_(0.), max_time_(1.), start_time_(0.), start_(false),
-        first_goal_(true), do_min_jerk_(false) {};
+        first_goal_(true), interpolator_(interpolator) {};
 
-  inline ~MinJerkInterpolator() {};
+  inline ~JointInterpolator() {};
 
   inline void Reset(const double &time_sec,
                     const Eigen::Matrix<double, 7, 1> &q_start,
@@ -94,7 +99,7 @@ public:
           std::min(std::max((time_sec - start_time_) / max_time_, 0.), 1.);
       // Min-jerk 5th-order polynomial transformation
       double transformed_t = t;
-      if (do_min_jerk_) {
+      if (interpolator_ == InterpolatorType::kMinJerk) {
         transformed_t =
             10 * std::pow(t, 3) - 15 * std::pow(t, 4) + 6 * std::pow(t, 5);
       }
@@ -111,4 +116,4 @@ public:
 } // namespace interpolators
 } // namespace bamboo
 
-#endif // BAMBOO_MIN_JERK_INTERPOLATOR_H_
+#endif // BAMBOO_JOINT_INTERPOLATOR_H_

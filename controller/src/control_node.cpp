@@ -31,7 +31,7 @@
 
 #include "bamboo_messages.h"
 #include "controllers/joint_impedance_controller.h"
-#include "interpolators/min_jerk_interpolator.h"
+#include "interpolators/joint_interpolator.h"
 
 // Global flag for signal handling
 std::atomic<bool> global_shutdown{false};
@@ -67,7 +67,7 @@ private:
   franka::Robot *robot_;
   franka::Model *model_;
   bamboo::controllers::JointImpedanceController *controller_;
-  bamboo::interpolators::MinJerkInterpolator *interpolator_;
+  bamboo::interpolators::JointInterpolator *interpolator_;
 
   std::atomic<bool> control_running_{false};
   std::atomic<bool> joint_limit_hit_{false};
@@ -90,7 +90,7 @@ private:
 public:
   BambooControlServer(franka::Robot *robot, franka::Model *model,
                       bamboo::controllers::JointImpedanceController *controller,
-                      bamboo::interpolators::MinJerkInterpolator *interpolator)
+                      bamboo::interpolators::JointInterpolator *interpolator)
       : robot_(robot), model_(model), controller_(controller),
         interpolator_(interpolator) {
 
@@ -628,7 +628,7 @@ msgpack::sbuffer handleError(const std::string &error_msg) {
 void RunServer(const std::string &server_address, franka::Robot *robot,
                franka::Model *model,
                bamboo::controllers::JointImpedanceController *controller,
-               bamboo::interpolators::MinJerkInterpolator *interpolator) {
+               bamboo::interpolators::JointInterpolator *interpolator) {
 
   BambooControlServer server(robot, model, controller, interpolator);
 
@@ -717,9 +717,10 @@ int main(int argc, char **argv) {
   std::string robot_ip;
   std::string port;
   std::string listen_address = "*"; // default
+  bool use_min_jerk = false;
 
   int opt;
-  while ((opt = getopt(argc, argv, "r:p:l:h")) != -1) {
+  while ((opt = getopt(argc, argv, "r:p:l:mh")) != -1) {
     switch (opt) {
     case 'r':
       robot_ip = optarg;
@@ -730,15 +731,20 @@ int main(int argc, char **argv) {
     case 'l':
       listen_address = optarg;
       break;
+    case 'm':
+      use_min_jerk = true;
+      break;
     case 'h':
     case '?':
     default:
       std::cerr << "Usage: " << argv[0]
-                << " -r <robot-ip> -p <port> [-l <listen-address>]"
+                << " -r <robot-ip> -p <port> [-l <listen-address>] [-m]"
                 << std::endl;
       std::cerr << "  -r: Robot IP address (required)" << std::endl;
       std::cerr << "  -p: Port number (required)" << std::endl;
       std::cerr << "  -l: Listen address (default: * for all interfaces)"
+                << std::endl;
+      std::cerr << "  -m: Use min-jerk interpolation (default: linear)"
                 << std::endl;
       std::cerr << "  -h: Show this help" << std::endl;
       return -1;
@@ -749,7 +755,7 @@ int main(int argc, char **argv) {
   if (robot_ip.empty() || port.empty()) {
     std::cerr << "Error: Robot IP and port are required" << std::endl;
     std::cerr << "Usage: " << argv[0]
-              << " -r <robot-ip> -p <port> [-l <listen-address>]" << std::endl;
+              << " -r <robot-ip> -p <port> [-l <listen-address>] [-m]" << std::endl;
     return -1;
   }
 
@@ -778,7 +784,10 @@ int main(int argc, char **argv) {
 
     // Create controller and interpolator
     bamboo::controllers::JointImpedanceController controller(&model);
-    bamboo::interpolators::MinJerkInterpolator interpolator;
+    bamboo::interpolators::InterpolatorType interp_type =
+        use_min_jerk ? bamboo::interpolators::InterpolatorType::kMinJerk
+                     : bamboo::interpolators::InterpolatorType::kLinear;
+    bamboo::interpolators::JointInterpolator interpolator(interp_type);
 
     // Start server
     RunServer(server_address, &robot, &model, &controller, &interpolator);
