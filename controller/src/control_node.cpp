@@ -755,7 +755,8 @@ int main(int argc, char **argv) {
   if (robot_ip.empty() || port.empty()) {
     std::cerr << "Error: Robot IP and port are required" << std::endl;
     std::cerr << "Usage: " << argv[0]
-              << " -r <robot-ip> -p <port> [-l <listen-address>] [-m]" << std::endl;
+              << " -r <robot-ip> -p <port> [-l <listen-address>] [-m]"
+              << std::endl;
     return -1;
   }
 

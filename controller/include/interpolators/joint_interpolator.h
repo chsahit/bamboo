@@ -8,10 +8,7 @@
 namespace bamboo {
 namespace interpolators {
 
-enum class InterpolatorType {
-  kLinear,
-  kMinJerk
-};
+enum class InterpolatorType { kLinear, kMinJerk };
 
 class JointInterpolator {
 private:
@@ -37,7 +34,8 @@ private:
   InterpolatorType interpolator_;
 
 public:
-  inline JointInterpolator(InterpolatorType interpolator = InterpolatorType::kLinear)
+  inline JointInterpolator(
+      InterpolatorType interpolator = InterpolatorType::kLinear)
       : dt_(0.), last_time_(0.), max_time_(1.), start_time_(0.), start_(false),
         first_goal_(true), interpolator_(interpolator) {};
 
