@@ -8,6 +8,7 @@
 #include <getopt.h>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -17,10 +18,9 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
-#include <map>
 
-#include <zmq.hpp>
 #include <msgpack.hpp>
+#include <zmq.hpp>
 
 #include <franka/exception.h>
 #include <franka/model.h>
@@ -29,9 +29,9 @@
 
 #include <Eigen/Dense>
 
+#include "bamboo_messages.h"
 #include "controllers/joint_impedance_controller.h"
 #include "interpolators/min_jerk_interpolator.h"
-#include "bamboo_messages.h"
 
 // Global flag for signal handling
 std::atomic<bool> global_shutdown{false};
@@ -88,10 +88,9 @@ private:
   const double diff_low_pass_freq_ = 30.0; // Hz
 
 public:
-  BambooControlServer(
-      franka::Robot *robot, franka::Model *model,
-      bamboo::controllers::JointImpedanceController *controller,
-      bamboo::interpolators::MinJerkInterpolator *interpolator)
+  BambooControlServer(franka::Robot *robot, franka::Model *model,
+                      bamboo::controllers::JointImpedanceController *controller,
+                      bamboo::interpolators::MinJerkInterpolator *interpolator)
       : robot_(robot), model_(model), controller_(controller),
         interpolator_(interpolator) {
 
@@ -142,9 +141,10 @@ public:
     }
   }
 
-  bool ExecuteJointImpedanceTrajectory(const bamboo_msgs::TrajectoryRequest &request) {
-    std::cout << "[SERVER] Received trajectory with " << request.waypoints.size()
-              << " waypoints" << std::endl;
+  bool ExecuteJointImpedanceTrajectory(
+      const bamboo_msgs::TrajectoryRequest &request) {
+    std::cout << "[SERVER] Received trajectory with "
+              << request.waypoints.size() << " waypoints" << std::endl;
 
     try {
       // Check if already running
@@ -180,7 +180,8 @@ public:
         }
 
         // Get waypoint velocity
-        Eigen::Matrix<double, 7, 1> waypoint_velocity = Eigen::Matrix<double, 7, 1>::Zero();
+        Eigen::Matrix<double, 7, 1> waypoint_velocity =
+            Eigen::Matrix<double, 7, 1>::Zero();
         if (waypoint.velocity.size() == 7) {
           // Use waypoint-specific velocity if provided
           for (int j = 0; j < 7; ++j) {
@@ -231,9 +232,10 @@ public:
   }
 
 private:
-  bool executeTrajectory(const std::vector<Eigen::Matrix<double, 7, 1>> &goals,
-                        const std::vector<Eigen::Matrix<double, 7, 1>> &velocities,
-                        const std::vector<double> &durations) {
+  bool
+  executeTrajectory(const std::vector<Eigen::Matrix<double, 7, 1>> &goals,
+                    const std::vector<Eigen::Matrix<double, 7, 1>> &velocities,
+                    const std::vector<double> &durations) {
     if (goals.empty())
       return false;
 
@@ -395,12 +397,14 @@ private:
 
         // Compute control torques
         bamboo::controllers::ControllerResult result =
-            controller_->Step(robot_state, q_desired , dq_desired, ddq_desired);
+            controller_->Step(robot_state, q_desired, dq_desired, ddq_desired);
 
         // Check for torque limit violation
         if (result.torque_limit_violated) {
           joint_limit_hit_ = true;
-          std::cout << "[CONTROL] Torque limit violated - ending trajectory early" << std::endl;
+          std::cout
+              << "[CONTROL] Torque limit violated - ending trajectory early"
+              << std::endl;
           std::array<double, 7> zero_torques = {0.0, 0.0, 0.0, 0.0,
                                                 0.0, 0.0, 0.0};
           return franka::MotionFinished(franka::Torques(zero_torques));
@@ -482,8 +486,9 @@ private:
 
       // Check if trajectory failed due to joint limit violation
       if (joint_limit_hit_) {
-        std::cerr << "[TRAJECTORY] Trajectory failed due to joint limit violation"
-                  << std::endl;
+        std::cerr
+            << "[TRAJECTORY] Trajectory failed due to joint limit violation"
+            << std::endl;
         return false;
       }
 
@@ -525,7 +530,8 @@ private:
 };
 
 // Message parsing helpers
-std::string parseCommand(const std::map<std::string, msgpack::object> &request_map) {
+std::string
+parseCommand(const std::map<std::string, msgpack::object> &request_map) {
   std::string command;
   auto it = request_map.find("command");
   if (it != request_map.end()) {
@@ -549,8 +555,9 @@ msgpack::sbuffer handleGetRobotState(BambooControlServer &server) {
   return response_buf;
 }
 
-msgpack::sbuffer handleExecuteTrajectory(BambooControlServer &server,
-                                         const std::map<std::string, msgpack::object> &request_map) {
+msgpack::sbuffer handleExecuteTrajectory(
+    BambooControlServer &server,
+    const std::map<std::string, msgpack::object> &request_map) {
   bamboo_msgs::TrajectoryRequest traj_req;
   auto it = request_map.find("data");
   if (it != request_map.end()) {
@@ -567,7 +574,8 @@ msgpack::sbuffer handleExecuteTrajectory(BambooControlServer &server,
   packer.pack(success);
   packer.pack("error");
   if (!success) {
-    packer.pack(std::string("Joint limit violated during trajectory execution"));
+    packer.pack(
+        std::string("Joint limit violated during trajectory execution"));
   } else {
     packer.pack(std::string(""));
   }
@@ -648,8 +656,7 @@ void RunServer(const std::string &server_address, franka::Robot *robot,
 
       // Unpack the request
       msgpack::object_handle oh = msgpack::unpack(
-          static_cast<const char*>(request_msg.data()),
-          request_msg.size());
+          static_cast<const char *>(request_msg.data()), request_msg.size());
       msgpack::object obj = oh.get();
 
       // Parse as a map to get the command
@@ -673,7 +680,8 @@ void RunServer(const std::string &server_address, franka::Robot *robot,
           response_buf = handleUnknownCommand(command);
         }
       } catch (const std::exception &e) {
-        std::cerr << "[SERVER] Error handling command: " << e.what() << std::endl;
+        std::cerr << "[SERVER] Error handling command: " << e.what()
+                  << std::endl;
         response_buf = handleError(e.what());
       }
 
@@ -682,7 +690,9 @@ void RunServer(const std::string &server_address, franka::Robot *robot,
 #if CPPZMQ_VERSION >= ZMQ_MAKE_VERSION(4, 3, 0)
       socket.send(response_msg, zmq::send_flags::none);
 #else
-      socket.send(response_msg, 0);  // Old API uses reference, not pointer (https://github.com/zeromq/cppzmq/issues/69)
+      socket.send(response_msg,
+                  0); // Old API uses reference, not pointer
+                      // (https://github.com/zeromq/cppzmq/issues/69)
 #endif
 
     } catch (const zmq::error_t &e) {
@@ -691,7 +701,8 @@ void RunServer(const std::string &server_address, franka::Robot *robot,
       }
       std::cerr << "[SERVER] Error: " << e.what() << std::endl;
     } catch (const std::exception &e) {
-      std::cerr << "[SERVER] Exception in message loop: " << e.what() << std::endl;
+      std::cerr << "[SERVER] Exception in message loop: " << e.what()
+                << std::endl;
     }
   }
 
@@ -705,36 +716,40 @@ int main(int argc, char **argv) {
 
   std::string robot_ip;
   std::string port;
-  std::string listen_address = "*";  // default
+  std::string listen_address = "*"; // default
 
   int opt;
   while ((opt = getopt(argc, argv, "r:p:l:h")) != -1) {
     switch (opt) {
-      case 'r':
-        robot_ip = optarg;
-        break;
-      case 'p':
-        port = optarg;
-        break;
-      case 'l':
-        listen_address = optarg;
-        break;
-      case 'h':
-      case '?':
-      default:
-        std::cerr << "Usage: " << argv[0] << " -r <robot-ip> -p <port> [-l <listen-address>]" << std::endl;
-        std::cerr << "  -r: Robot IP address (required)" << std::endl;
-        std::cerr << "  -p: Port number (required)" << std::endl;
-        std::cerr << "  -l: Listen address (default: * for all interfaces)" << std::endl;
-        std::cerr << "  -h: Show this help" << std::endl;
-        return -1;
+    case 'r':
+      robot_ip = optarg;
+      break;
+    case 'p':
+      port = optarg;
+      break;
+    case 'l':
+      listen_address = optarg;
+      break;
+    case 'h':
+    case '?':
+    default:
+      std::cerr << "Usage: " << argv[0]
+                << " -r <robot-ip> -p <port> [-l <listen-address>]"
+                << std::endl;
+      std::cerr << "  -r: Robot IP address (required)" << std::endl;
+      std::cerr << "  -p: Port number (required)" << std::endl;
+      std::cerr << "  -l: Listen address (default: * for all interfaces)"
+                << std::endl;
+      std::cerr << "  -h: Show this help" << std::endl;
+      return -1;
     }
   }
 
   // Validate required arguments
   if (robot_ip.empty() || port.empty()) {
     std::cerr << "Error: Robot IP and port are required" << std::endl;
-    std::cerr << "Usage: " << argv[0] << " -r <robot-ip> -p <port> [-l <listen-address>]" << std::endl;
+    std::cerr << "Usage: " << argv[0]
+              << " -r <robot-ip> -p <port> [-l <listen-address>]" << std::endl;
     return -1;
   }
 

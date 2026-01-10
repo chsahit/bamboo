@@ -17,9 +17,9 @@ repos:
 #        exclude: ^(third_party/)
 
 #  # C/C++ formatting
-#  - repo: https://github.com/pre-commit/mirrors-clang-format
-#    rev: v18.1.8
-#    hooks:
-#      - id: clang-format
-#        files: "\\.(c|cc|cpp|cxx|h|hh|hpp)$"
-#        exclude: ^(controller/third_party/)
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v18.1.8
+    hooks:
+      - id: clang-format
+        files: "\\.(c|cc|cpp|cxx|h|hh|hpp)$"
+        exclude: ^(controller/third_party/)
