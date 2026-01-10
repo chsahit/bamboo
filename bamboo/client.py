@@ -326,10 +326,9 @@ class BambooFrankaClient:
 
             _log.debug(f"Executing {joint_confs.shape[0]} joint waypoints")
 
-            # Validate and normalize kp parameter
+            # Validate kp
             kp_per_waypoint = None
             if kp is not None:
-                # Check if it's a single list of 7 values or a list of lists
                 if isinstance(kp[0], (list, tuple)):
                     # Per-waypoint gains
                     if len(kp) != joint_confs.shape[0]:
@@ -346,7 +345,7 @@ class BambooFrankaClient:
                         raise ValueError(f"kp must have 7 values, got {len(kp)}")
                     kp_per_waypoint = [kp] * joint_confs.shape[0]
 
-            # Validate and normalize kd parameter
+            # Validate kd
             kd_per_waypoint = None
             if kd is not None:
                 # Check if it's a single list of 7 values or a list of lists
@@ -400,7 +399,6 @@ class BambooFrankaClient:
                     "duration": waypoint_duration,
                 }
 
-                # Add per-waypoint kp and kd if specified
                 if kp_per_waypoint is not None:
                     waypoint["kp"] = kp_per_waypoint[i]
                 if kd_per_waypoint is not None:
