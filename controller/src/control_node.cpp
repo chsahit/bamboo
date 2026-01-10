@@ -282,10 +282,8 @@ private:
         kd_array[i] = first_waypoint.kd[i];
       }
       controller_->SetGains(kp_array, kd_array);
-      std::cout << "[CONTROL] Using custom gains for waypoint 0" << std::endl;
     } else {
       controller_->RestoreDefaultGains();
-      std::cout << "[CONTROL] Using default gains for waypoint 0" << std::endl;
     }
 
     std::cout << "[CONTROL] Starting trajectory with " << goals.size()
