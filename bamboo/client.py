@@ -293,6 +293,8 @@ class BambooFrankaClient:
         joint_vels: np.ndarray | None = None,
         durations: list | None = None,
         default_duration: float = 0.5,
+        kp: list[float] | list[list[float]] | None = None,
+        kd: list[float] | list[list[float]] | None = None,
     ) -> dict[str, bool | str]:
         """Execute joint impedance trajectory and wait for completion.
 
@@ -303,6 +305,14 @@ class BambooFrankaClient:
                       If None, all waypoints use default_duration.
                       If shorter than joint_confs, remaining waypoints use default_duration.
             default_duration: Default duration in seconds for waypoints (default: 1.0s)
+            kp: Optional stiffness gains. Can be:
+                - None: Use controller's tuned defaults for all waypoints
+                - list[float] of length 7: Use same custom gains for all waypoints
+                - list[list[float]] of shape (n, 7): Use different gains per waypoint
+            kd: Optional damping gains. Can be:
+                - None: Use controller's tuned defaults for all waypoints
+                - list[float] of length 7: Use same custom gains for all waypoints
+                - list[list[float]] of shape (n, 7): Use different gains per waypoint
 
         Returns:
             Dict with 'success' (bool) and 'error' (str) if failed
@@ -315,6 +325,46 @@ class BambooFrankaClient:
                 raise ValueError(f"joint_confs must have 7 columns, got {joint_confs.shape[1]}")
 
             _log.debug(f"Executing {joint_confs.shape[0]} joint waypoints")
+
+            # Validate and normalize kp parameter
+            kp_per_waypoint = None
+            if kp is not None:
+                # Check if it's a single list of 7 values or a list of lists
+                if isinstance(kp[0], (list, tuple)):
+                    # Per-waypoint gains
+                    if len(kp) != joint_confs.shape[0]:
+                        raise ValueError(
+                            f"kp must have same length as joint_confs ({joint_confs.shape[0]}), got {len(kp)}"
+                        )
+                    for i, kp_i in enumerate(kp):
+                        if len(kp_i) != 7:
+                            raise ValueError(f"kp[{i}] must have 7 values, got {len(kp_i)}")
+                    kp_per_waypoint = kp
+                else:
+                    # Single list of 7 values for all waypoints
+                    if len(kp) != 7:
+                        raise ValueError(f"kp must have 7 values, got {len(kp)}")
+                    kp_per_waypoint = [kp] * joint_confs.shape[0]
+
+            # Validate and normalize kd parameter
+            kd_per_waypoint = None
+            if kd is not None:
+                # Check if it's a single list of 7 values or a list of lists
+                if isinstance(kd[0], (list, tuple)):
+                    # Per-waypoint gains
+                    if len(kd) != joint_confs.shape[0]:
+                        raise ValueError(
+                            f"kd must have same length as joint_confs ({joint_confs.shape[0]}), got {len(kd)}"
+                        )
+                    for i, kd_i in enumerate(kd):
+                        if len(kd_i) != 7:
+                            raise ValueError(f"kd[{i}] must have 7 values, got {len(kd_i)}")
+                    kd_per_waypoint = kd
+                else:
+                    # Single list of 7 values for all waypoints
+                    if len(kd) != 7:
+                        raise ValueError(f"kd must have 7 values, got {len(kd)}")
+                    kd_per_waypoint = [kd] * joint_confs.shape[0]
 
             # Validate joint_vels parameter
             if joint_vels is None:
@@ -348,9 +398,13 @@ class BambooFrankaClient:
                     "q_goal": joint_conf.tolist(),
                     "velocity": joint_vel.tolist(),
                     "duration": waypoint_duration,
-                    "kp": [600.0] * 7,  # Default stiffness
-                    "kd": [50.0] * 7,  # Default damping
                 }
+
+                # Add per-waypoint kp and kd if specified
+                if kp_per_waypoint is not None:
+                    waypoint["kp"] = kp_per_waypoint[i]
+                if kd_per_waypoint is not None:
+                    waypoint["kd"] = kd_per_waypoint[i]
 
                 waypoints.append(waypoint)
 

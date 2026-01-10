@@ -214,7 +214,7 @@ public:
 
       // Execute entire trajectory in single control call
       bool success = executeTrajectory(trajectory_goals, trajectory_velocities,
-                                       trajectory_durations);
+                                       trajectory_durations, request.waypoints);
       if (!success) {
         throw std::runtime_error("Trajectory execution failed");
       }
@@ -235,7 +235,8 @@ private:
   bool
   executeTrajectory(const std::vector<Eigen::Matrix<double, 7, 1>> &goals,
                     const std::vector<Eigen::Matrix<double, 7, 1>> &velocities,
-                    const std::vector<double> &durations) {
+                    const std::vector<double> &durations,
+                    const std::vector<bamboo_msgs::TimedWaypoint> &waypoints) {
     if (goals.empty())
       return false;
 
@@ -271,6 +272,21 @@ private:
                            : velocities[0];
     interpolator_->Reset(control_time, q_current_, q_goal_, velocity_start,
                          velocity_goal, traj_rate_, durations[0]);
+
+    // Set gains for first waypoint (or restore to defaults if not specified)
+    const bamboo_msgs::TimedWaypoint &first_waypoint = waypoints[0];
+    if (first_waypoint.kp.size() == 7 && first_waypoint.kd.size() == 7) {
+      std::array<double, 7> kp_array, kd_array;
+      for (size_t i = 0; i < 7; ++i) {
+        kp_array[i] = first_waypoint.kp[i];
+        kd_array[i] = first_waypoint.kd[i];
+      }
+      controller_->SetGains(kp_array, kd_array);
+      std::cout << "[CONTROL] Using custom gains for waypoint 0" << std::endl;
+    } else {
+      controller_->RestoreDefaultGains();
+      std::cout << "[CONTROL] Using default gains for waypoint 0" << std::endl;
+    }
 
     std::cout << "[CONTROL] Starting trajectory with " << goals.size()
               << " waypoints" << std::endl;
@@ -368,6 +384,25 @@ private:
             interpolator_->Reset(control_time, q_current_, q_goal_,
                                  velocity_prev, velocity_curr, traj_rate_,
                                  durations[current_waypoint]);
+
+            // Set gains for new waypoint (or restore to defaults if not
+            // specified)
+            const bamboo_msgs::TimedWaypoint &waypoint =
+                waypoints[current_waypoint];
+            if (waypoint.kp.size() == 7 && waypoint.kd.size() == 7) {
+              std::array<double, 7> kp_array, kd_array;
+              for (size_t i = 0; i < 7; ++i) {
+                kp_array[i] = waypoint.kp[i];
+                kd_array[i] = waypoint.kd[i];
+              }
+              controller_->SetGains(kp_array, kd_array);
+              std::cout << "[CONTROL] Using custom gains for waypoint "
+                        << current_waypoint << std::endl;
+            } else {
+              controller_->RestoreDefaultGains();
+              std::cout << "[CONTROL] Using default gains for waypoint "
+                        << current_waypoint << std::endl;
+            }
           }
         }
 
