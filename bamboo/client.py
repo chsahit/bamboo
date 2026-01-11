@@ -255,7 +255,7 @@ class BambooFrankaClient:
             "time_sec": time_sec,
             "gripper_state": gripper_state,
             "gripper_is_grasped": gripper_is_grasped,
-            "gripper_is_moving": gripper_is_moving
+            "gripper_is_moving": gripper_is_moving,
         }
 
     def close(self) -> None:
