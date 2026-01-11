@@ -101,8 +101,15 @@ Other commands:
 
 ```bash
 cd controller/build
-./bamboo_control_node -r <robot-ip> -p <zmq-port> [-l <listen-address>]
+./bamboo_control_node -r <robot-ip> -p <zmq-port> [-l <listen-address>] [-m]
 ```
+
+Available flags:
+- `-r`: Robot IP address (required)
+- `-p`: Port number (required)
+- `-l`: Listen address (default: * for all interfaces)
+- `-m`: Use min-jerk interpolation (default: linear)
+- `-h`: Show help
 
 Example:
 ```bash
@@ -174,7 +181,7 @@ pre-commit run --files path/to/file.py
 
 ## Contributing
 
-For Python code, we enforce style with `ruff` and type checking with `mypy`. For C++ code, we enforce style with `clang-tidy`.
+For Python code, we enforce style with `ruff` and type checking with `mypy`. For C++ code, we enforce style with `clang-format`.
 
 Pre-commit hooks will automatically run linting and formatting checks when you make a commit. You can also run them manually with `pre-commit run --all-files`.
 

@@ -32,12 +32,19 @@ public:
   void SetGains(const std::array<double, 7> &kp,
                 const std::array<double, 7> &kd);
 
+  // Restore default controller gains
+  void RestoreDefaultGains();
+
 private:
   franka::Model *model_;
 
   // Controller gains
   Eigen::Matrix<double, 7, 1> Kp_;
   Eigen::Matrix<double, 7, 1> Kd_;
+
+  // Default controller gains (stored for restoration)
+  Eigen::Matrix<double, 7, 1> Kp_default_;
+  Eigen::Matrix<double, 7, 1> Kd_default_;
 
   // Torque limits per joint
   Eigen::Matrix<double, 7, 1> joint_tau_limits_;
