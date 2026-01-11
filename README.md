@@ -181,7 +181,7 @@ pre-commit run --files path/to/file.py
 
 ## Contributing
 
-For Python code, we enforce style with `ruff` and type checking with `mypy`. For C++ code, we enforce style with `clang-tidy`.
+For Python code, we enforce style with `ruff` and type checking with `mypy`. For C++ code, we enforce style with `clang-format`.
 
 Pre-commit hooks will automatically run linting and formatting checks when you make a commit. You can also run them manually with `pre-commit run --all-files`.
 

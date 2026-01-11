@@ -34,7 +34,12 @@ class JointStates(TypedDict, total=False):
 
     ee_pose: list[list[float]]
     qpos: list[float]
+    dq: list[float]
+    tau_J: list[float]
+    time_sec: float
     gripper_state: float
+    gripper_is_grasped: bool
+    gripper_is_moving: bool
 
 
 class BambooFrankaClient:
@@ -202,7 +207,7 @@ class BambooFrankaClient:
         """Get current robot joint states.
 
         Returns:
-            Dict with 'ee_pose', 'qpos', 'gripper_state'
+            Dict with 'ee_pose', 'qpos', 'dq', 'tau_J', 'time_sec', 'gripper_state'
 
         Raises:
             BambooConnectionError: If connection to controller fails
@@ -214,6 +219,15 @@ class BambooFrankaClient:
 
         # Extract joint positions
         qpos = list(state_msg["q"])  # Convert to list for JSON serialization
+
+        # Extract joint velocities
+        dq = list(state_msg["dq"])
+
+        # Extract joint torques
+        tau_J = list(state_msg["tau_J"])
+
+        # Extract timestamp
+        time_sec = float(state_msg["time_sec"])
 
         # Extract end-effector pose (4x4 transformation matrix)
         # Convert flat array to 4x4 matrix (column-major)
@@ -228,10 +242,21 @@ class BambooFrankaClient:
             if not gripper_result.get("success"):
                 raise BambooGripperError(f"Failed to get gripper state: {gripper_result.get('error', 'Unknown error')}")
             gripper_state = gripper_result["state"]["width"]
+            gripper_is_grasped = gripper_result["state"]["is_grasped"]
+            gripper_is_moving = gripper_result["state"]["is_moving"]
         else:
             gripper_state = 0.0  # No gripper enabled
 
-        return {"ee_pose": ee_pose, "qpos": qpos, "gripper_state": gripper_state}
+        return {
+            "ee_pose": ee_pose,
+            "qpos": qpos,
+            "dq": dq,
+            "tau_J": tau_J,
+            "time_sec": time_sec,
+            "gripper_state": gripper_state,
+            "gripper_is_grasped": gripper_is_grasped,
+            "gripper_is_moving": gripper_is_moving
+        }
 
     def close(self) -> None:
         """Clean up ZMQ resources."""
