@@ -1,4 +1,4 @@
-// Joint Impedance control with Min-Jerk interpolation
+// Joint Impedance control
 
 #include <atomic>
 #include <chrono>
@@ -11,6 +11,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <queue>
 #include <signal.h>
 #include <stdexcept>
@@ -160,6 +161,8 @@ public:
       std::vector<Eigen::Matrix<double, 7, 1>> trajectory_goals;
       std::vector<Eigen::Matrix<double, 7, 1>> trajectory_velocities;
       std::vector<double> trajectory_durations;
+      std::vector<std::optional<std::array<double, 7>>> trajectory_kp;
+      std::vector<std::optional<std::array<double, 7>>> trajectory_kd;
 
       for (size_t i = 0; i < request.waypoints.size(); ++i) {
         const bamboo_msgs::TimedWaypoint &waypoint = request.waypoints[i];
@@ -195,6 +198,26 @@ public:
         }
         // If neither is provided, waypoint_velocity remains zero
 
+        // Get waypoint kp (optional)
+        std::optional<std::array<double, 7>> waypoint_kp = std::nullopt;
+        if (waypoint.kp.size() == 7) {
+          std::array<double, 7> kp_array;
+          for (size_t j = 0; j < 7; ++j) {
+            kp_array[j] = waypoint.kp[j];
+          }
+          waypoint_kp = kp_array;
+        }
+
+        // Get waypoint kd (optional)
+        std::optional<std::array<double, 7>> waypoint_kd = std::nullopt;
+        if (waypoint.kd.size() == 7) {
+          std::array<double, 7> kd_array;
+          for (size_t j = 0; j < 7; ++j) {
+            kd_array[j] = waypoint.kd[j];
+          }
+          waypoint_kd = kd_array;
+        }
+
         // Check for termination
         if (global_shutdown) {
           std::cout << "[SERVER] Termination requested" << std::endl;
@@ -210,11 +233,14 @@ public:
         trajectory_goals.push_back(goal);
         trajectory_velocities.push_back(waypoint_velocity);
         trajectory_durations.push_back(waypoint_duration);
+        trajectory_kp.push_back(waypoint_kp);
+        trajectory_kd.push_back(waypoint_kd);
       }
 
       // Execute entire trajectory in single control call
-      bool success = executeTrajectory(trajectory_goals, trajectory_velocities,
-                                       trajectory_durations, request.waypoints);
+      bool success =
+          executeTrajectory(trajectory_goals, trajectory_velocities,
+                            trajectory_durations, trajectory_kp, trajectory_kd);
       if (!success) {
         throw std::runtime_error("Trajectory execution failed");
       }
@@ -232,11 +258,13 @@ public:
   }
 
 private:
-  bool
-  executeTrajectory(const std::vector<Eigen::Matrix<double, 7, 1>> &goals,
-                    const std::vector<Eigen::Matrix<double, 7, 1>> &velocities,
-                    const std::vector<double> &durations,
-                    const std::vector<bamboo_msgs::TimedWaypoint> &waypoints) {
+  bool executeTrajectory(
+      const std::vector<Eigen::Matrix<double, 7, 1>> &goals,
+      const std::vector<Eigen::Matrix<double, 7, 1>> &velocities,
+      const std::vector<double> &durations,
+      const std::vector<std::optional<std::array<double, 7>>> &kp_per_waypoint,
+      const std::vector<std::optional<std::array<double, 7>>>
+          &kd_per_waypoint) {
     if (goals.empty())
       return false;
 
@@ -274,14 +302,9 @@ private:
                          velocity_goal, traj_rate_, durations[0]);
 
     // Set gains for first waypoint (or restore to defaults if not specified)
-    const bamboo_msgs::TimedWaypoint &first_waypoint = waypoints[0];
-    if (first_waypoint.kp.size() == 7 && first_waypoint.kd.size() == 7) {
-      std::array<double, 7> kp_array, kd_array;
-      for (size_t i = 0; i < 7; ++i) {
-        kp_array[i] = first_waypoint.kp[i];
-        kd_array[i] = first_waypoint.kd[i];
-      }
-      controller_->SetGains(kp_array, kd_array);
+    if (kp_per_waypoint[0].has_value() && kd_per_waypoint[0].has_value()) {
+      controller_->SetGains(kp_per_waypoint[0].value(),
+                            kd_per_waypoint[0].value());
     } else {
       controller_->RestoreDefaultGains();
     }
@@ -385,15 +408,10 @@ private:
 
             // Set gains for new waypoint (or restore to defaults if not
             // specified)
-            const bamboo_msgs::TimedWaypoint &waypoint =
-                waypoints[current_waypoint];
-            if (waypoint.kp.size() == 7 && waypoint.kd.size() == 7) {
-              std::array<double, 7> kp_array, kd_array;
-              for (size_t i = 0; i < 7; ++i) {
-                kp_array[i] = waypoint.kp[i];
-                kd_array[i] = waypoint.kd[i];
-              }
-              controller_->SetGains(kp_array, kd_array);
+            if (kp_per_waypoint[current_waypoint].has_value() &&
+                kd_per_waypoint[current_waypoint].has_value()) {
+              controller_->SetGains(kp_per_waypoint[current_waypoint].value(),
+                                    kd_per_waypoint[current_waypoint].value());
               std::cout << "[CONTROL] Using custom gains for waypoint "
                         << current_waypoint << std::endl;
             } else {
