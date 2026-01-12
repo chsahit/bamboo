@@ -370,7 +370,7 @@ class BambooFrankaClient:
             old_timeout = self.control_socket.getsockopt(zmq.RCVTIMEO)
             self.control_socket.setsockopt(zmq.RCVTIMEO, trajectory_timeout_ms)
             _log.debug(
-                f"Set trajectory timeout to {trajectory_timeout_ms/1000.0:.1f}s for {total_duration:.1f}s trajectory"
+                f"Set trajectory timeout to {trajectory_timeout_ms / 1000.0:.1f}s for {total_duration:.1f}s trajectory"
             )
 
             try:
@@ -481,7 +481,7 @@ def main() -> None:
 
             for i in range(args.samples):
                 result = client.get_joint_states()
-                print(f"Sample {i+1}:")
+                print(f"Sample {i + 1}:")
                 print(f"  Joint positions: {[f'{q:.4f}' for q in result['qpos']]}")
                 print(
                     f"  EE position: [{result['ee_pose'][0][3]:.4f}, "
