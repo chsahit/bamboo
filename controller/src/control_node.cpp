@@ -412,12 +412,8 @@ private:
                 kd_per_waypoint[current_waypoint].has_value()) {
               controller_->SetGains(kp_per_waypoint[current_waypoint].value(),
                                     kd_per_waypoint[current_waypoint].value());
-              std::cout << "[CONTROL] Using custom gains for waypoint "
-                        << current_waypoint << std::endl;
             } else {
               controller_->RestoreDefaultGains();
-              std::cout << "[CONTROL] Using default gains for waypoint "
-                        << current_waypoint << std::endl;
             }
           }
         }
