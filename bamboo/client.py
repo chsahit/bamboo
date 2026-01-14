@@ -47,6 +47,7 @@ class BambooFrankaClient:
         gripper_port: int = 5559,
         enable_gripper: bool = True,
         gripper_type: str = "robotiq",
+        gripper_type: str = "robotiq",
     ):
         """Initialize Bamboo Franka Client.
 
@@ -56,9 +57,17 @@ class BambooFrankaClient:
             gripper_port: ZMQ port of the gripper server (default: 5559)
             enable_gripper: Whether to enable gripper commands
             gripper_type: Type of gripper - "robotiq" or "franka" (default: "robotiq")
+            gripper_type: Type of gripper - "robotiq" or "franka" (default: "robotiq")
         """
         self.control_port = control_port
         self.server_ip = server_ip
+        self.gripper_port = gripper_port
+        self.enable_gripper = enable_gripper
+        self.gripper_type = gripper_type
+
+        # Validate gripper type
+        if gripper_type not in ["robotiq", "franka"]:
+            raise ValueError(f"Invalid gripper_type '{gripper_type}'. Must be 'robotiq' or 'franka'")
         self.gripper_port = gripper_port
         self.enable_gripper = enable_gripper
         self.gripper_type = gripper_type
@@ -80,7 +89,9 @@ class BambooFrankaClient:
 
         # For Robotiq, create separate gripper socket to gripper_server
         # For Franka, gripper commands go through control_socket to control_node
-        if enable_gripper and gripper_type == "robotiq":
+        # For Robotiq, create separate gripper socket to gripper_server
+        # For Franka, gripper commands go through control_socket to control_node
+        if enable_gripper and gripper_type == "robotiq" and gripper_type == "robotiq":
             # Set up ZMQ socket for gripper commands (REQ socket for request-response)
             self.gripper_socket = self.zmq_context.socket(zmq.REQ)
             self.gripper_socket.connect(f"tcp://{self.server_ip}:{gripper_port}")
@@ -130,8 +141,8 @@ class BambooFrankaClient:
             self.zmq_context = zmq.Context()
             self.control_socket = self.zmq_context.socket(zmq.REQ)
 
-            # Recreate gripper socket if it was enabled and gripper type is robotiq
-            if self.enable_gripper and self.gripper_type == "robotiq":
+            # Recreate gripper socket if it was enabled and gripper type is robotiq and gripper type is robotiq
+            if self.enable_gripper and self.gripper_type == "robotiq" and self.gripper_type == "robotiq":
                 self.gripper_socket = self.zmq_context.socket(zmq.REQ)
                 self.gripper_socket.connect(f"tcp://{self.server_ip}:{self.gripper_port}")
                 self.gripper_socket.setsockopt(zmq.RCVTIMEO, 5000)
@@ -270,6 +281,40 @@ class BambooFrankaClient:
 
     def get_joint_positions(self) -> list[float]:
         return self.get_joint_states()["qpos"]
+
+    def _send_control_command(self, command: dict, timeout_ms: int = 5000) -> dict:
+        """Send a command to the control node.
+
+        Args:
+            command: Dict with command to send
+            timeout_ms: Timeout in milliseconds
+
+        Returns:
+            Dict with response from control node
+
+        Raises:
+            BambooTimeoutError: If command times out
+        """
+        try:
+            # Save old timeout
+            old_timeout = self.control_socket.getsockopt(zmq.RCVTIMEO)
+            self.control_socket.setsockopt(zmq.RCVTIMEO, timeout_ms)
+
+            try:
+                # Send command
+                self.control_socket.send(msgpack.packb(command))
+
+                # Receive response
+                response_data = self.control_socket.recv()
+                response = msgpack.unpackb(response_data, raw=False)
+
+                return response  # type: ignore[no-any-return]
+            finally:
+                # Restore timeout
+                self.control_socket.setsockopt(zmq.RCVTIMEO, old_timeout)
+
+        except zmq.Again:
+            raise BambooTimeoutError("Timeout waiting for control node response") from None
 
     def _send_control_command(self, command: dict, timeout_ms: int = 5000) -> dict:
         """Send a command to the control node.
@@ -458,7 +503,7 @@ class BambooFrankaClient:
             blocking: Whether to block until gripper finishes (Robotiq only, Franka always blocks)
 
         Returns:
-            Dict with response from gripper server or control node
+            Dict with response from gripper server or control node or control node
 
         Raises:
             BambooGripperError: If gripper not enabled or command fails
@@ -496,7 +541,7 @@ class BambooFrankaClient:
             blocking: Whether to block until gripper finishes (Robotiq only, Franka always blocks)
 
         Returns:
-            Dict with response from gripper server or control node
+            Dict with response from gripper server or control node or control node
 
         Raises:
             BambooGripperError: If gripper not enabled or command fails
@@ -530,7 +575,7 @@ class BambooFrankaClient:
         """Get current gripper state.
 
         Returns:
-            Dict with 'success' and 'state' from gripper server or control node
+            Dict with 'success' and 'state' from gripper server or control node or control node
 
         Raises:
             BambooGripperError: If gripper not enabled or command fails
