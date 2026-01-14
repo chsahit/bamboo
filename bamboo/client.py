@@ -466,8 +466,10 @@ class BambooFrankaClient:
                 return {"success": True}
             else:
                 error_msg = response.get("error", "Trajectory execution failed")
-                _log.error(f"Trajectory failed: {error_msg}")
-                _log.error("Please restart the controller node on the machine connected to the robot.")
+                _log.error(
+                    f"Trajectory failed: {error_msg}. \n"
+                    f" Please restart the controller node on the machine connected to the robot."
+                )
                 return {"success": False, "error": error_msg}
 
         except zmq.Again:
