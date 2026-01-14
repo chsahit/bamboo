@@ -473,7 +473,7 @@ class BambooFrankaClient:
             command = {
                 "command": "open_gripper",
                 "width": 0.08,  # Max width for Franka Hand
-                "speed": speed
+                "speed": speed,
             }
             return self._send_control_command(command)
         else:
@@ -483,7 +483,7 @@ class BambooFrankaClient:
                 "width": 0.085,  # Max width for Robotiq 2F-85
                 "speed": speed,
                 "force": force,
-                "blocking": blocking
+                "blocking": blocking,
             }
             return self._send_gripper_command(command)
 
@@ -512,7 +512,7 @@ class BambooFrankaClient:
                 "command": "close_gripper",
                 "width": 0.0,  # Full close/grasp
                 "speed": speed,
-                "force": force  # Will be converted to Newtons in C++ (5-70N)
+                "force": force,  # Will be converted to Newtons in C++ (5-70N)
             }
             return self._send_control_command(command)
         else:
@@ -522,7 +522,7 @@ class BambooFrankaClient:
                 "width": 0.0,  # Full close
                 "speed": speed,
                 "force": force,
-                "blocking": blocking
+                "blocking": blocking,
             }
             return self._send_gripper_command(command)
 
