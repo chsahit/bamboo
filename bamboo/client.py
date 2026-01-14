@@ -312,14 +312,48 @@ class BambooFrankaClient:
         except zmq.Again:
             raise BambooTimeoutError("Timeout waiting for gripper server response") from None
 
+    def _validate_gains(
+        self, joint_confs: np.ndarray, gains: np.ndarray | None, label: str
+    ) -> list[list[float]] | None:
+        gains_per_waypoint = None
+        if gains is not None:
+            if not isinstance(gains, np.ndarray):
+                raise TypeError(f"{label} must be a numpy array, got {type(gains)}")
+
+            # Validate non-negative
+            if np.any(gains < 0):
+                raise ValueError(f"All {label} values must be >= 0, got min value {gains.min()}")
+
+            if gains.ndim == 1:
+                # Single array of 7 values for all waypoints
+                if gains.shape[0] != 7:
+                    raise ValueError(f"{label} must have shape (7,), got {gains.shape}")
+                # Broadcast to all waypoints - convert to list for each waypoint
+                gains_per_waypoint = [gains.tolist()] * joint_confs.shape[0]
+            elif gains.ndim == 2:
+                # Per-waypoint gains
+                if gains.shape[0] != joint_confs.shape[0]:
+                    raise ValueError(
+                        f"{label} must have same number of rows as joint_confs "
+                        f"({joint_confs.shape[0]}), got {gains.shape[0]}"
+                    )
+                if gains.shape[1] != 7:
+                    raise ValueError(f"{label} must have 7 columns, got {gains.shape[1]}")
+                # Convert each row to list
+                gains_per_waypoint = [gains[i].tolist() for i in range(gains.shape[0])]
+            else:
+                raise ValueError(f"{label} must be 1D or 2D array, got {gains.ndim}D")
+
+        return gains_per_waypoint
+
     def execute_joint_impedance_path(
         self,
         joint_confs: np.ndarray,
         joint_vels: np.ndarray | None = None,
         durations: list | None = None,
         default_duration: float = 0.5,
-        kp: list[float] | list[list[float]] | None = None,
-        kd: list[float] | list[list[float]] | None = None,
+        kp: np.ndarray | None = None,
+        kd: np.ndarray | None = None,
     ) -> dict[str, bool | str]:
         """Execute joint impedance trajectory and wait for completion.
 
@@ -332,12 +366,12 @@ class BambooFrankaClient:
             default_duration: Default duration in seconds for waypoints (default: 1.0s)
             kp: Optional stiffness gains. Can be:
                 - None: Use controller's tuned defaults for all waypoints
-                - list[float] of length 7: Use same custom gains for all waypoints
-                - list[list[float]] of shape (n, 7): Use different gains per waypoint
+                - np.ndarray of shape (7,): Use same custom gains for all waypoints
+                - np.ndarray of shape (n, 7): Use different gains per waypoint
             kd: Optional damping gains. Can be:
                 - None: Use controller's tuned defaults for all waypoints
-                - list[float] of length 7: Use same custom gains for all waypoints
-                - list[list[float]] of shape (n, 7): Use different gains per waypoint
+                - np.ndarray of shape (7,): Use same custom gains for all waypoints
+                - np.ndarray of shape (n, 7): Use different gains per waypoint
 
         Returns:
             Dict with 'success' (bool) and 'error' (str) if failed
@@ -351,44 +385,9 @@ class BambooFrankaClient:
 
             _log.debug(f"Executing {joint_confs.shape[0]} joint waypoints")
 
-            # Validate kp
-            kp_per_waypoint = None
-            if kp is not None:
-                if isinstance(kp[0], (list, tuple)):
-                    # Per-waypoint gains
-                    if len(kp) != joint_confs.shape[0]:
-                        raise ValueError(
-                            f"kp must have same length as joint_confs ({joint_confs.shape[0]}), got {len(kp)}"
-                        )
-                    for i, kp_i in enumerate(kp):
-                        if len(kp_i) != 7:
-                            raise ValueError(f"kp[{i}] must have 7 values, got {len(kp_i)}")
-                    kp_per_waypoint = kp
-                else:
-                    # Single list of 7 values for all waypoints
-                    if len(kp) != 7:
-                        raise ValueError(f"kp must have 7 values, got {len(kp)}")
-                    kp_per_waypoint = [kp] * joint_confs.shape[0]
-
-            # Validate kd
-            kd_per_waypoint = None
-            if kd is not None:
-                # Check if it's a single list of 7 values or a list of lists
-                if isinstance(kd[0], (list, tuple)):
-                    # Per-waypoint gains
-                    if len(kd) != joint_confs.shape[0]:
-                        raise ValueError(
-                            f"kd must have same length as joint_confs ({joint_confs.shape[0]}), got {len(kd)}"
-                        )
-                    for i, kd_i in enumerate(kd):
-                        if len(kd_i) != 7:
-                            raise ValueError(f"kd[{i}] must have 7 values, got {len(kd_i)}")
-                    kd_per_waypoint = kd
-                else:
-                    # Single list of 7 values for all waypoints
-                    if len(kd) != 7:
-                        raise ValueError(f"kd must have 7 values, got {len(kd)}")
-                    kd_per_waypoint = [kd] * joint_confs.shape[0]
+            # Validate kp and kd
+            kp_per_waypoint = self._validate_gains(joint_confs, kp, "kp")
+            kd_per_waypoint = self._validate_gains(joint_confs, kd, "kd")
 
             # Validate joint_vels parameter
             if joint_vels is None:
