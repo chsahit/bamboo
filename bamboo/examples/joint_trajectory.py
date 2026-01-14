@@ -37,6 +37,13 @@ def main() -> None:
         default=5559,
         help="Gripper port",
     )
+    parser.add_argument(
+        "--gripper-type",
+        type=str,
+        default="robotiq",
+        choices=["robotiq", "franka"],
+        help="Gripper type (default: robotiq)",
+    )
     args = parser.parse_args()
 
     print("Creating BambooFrankaClient...")
@@ -46,6 +53,7 @@ def main() -> None:
         control_port=args.control_port,
         server_ip=args.server_ip,
         gripper_port=args.gripper_port,
+        gripper_type=args.gripper_type,
     ) as client:
         # Get current joint angles
         print("\nGetting current joint angles...")

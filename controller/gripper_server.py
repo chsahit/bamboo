@@ -57,42 +57,45 @@ class GripperServer:
         """Handle a gripper command.
 
         Args:
-            command: Dict with 'action' and parameters
+            command: Dict with 'command' and parameters (standardized format)
 
         Returns:
             Dict with response
         """
         try:
-            action = command.get("action")
-            print(f"{action=}")
+            cmd = command.get("command")
+            print(f"{cmd=}")
 
-            if action == "open":
+            if cmd == "open_gripper":
+                # Use width from command, or default to max width
+                width = command.get("width", 0.085)
                 speed = command.get("speed", 0.05)
                 force = command.get("force", 0.1)
-                max_gripper_width = 0.085
-                success = self.gripper.apply_gripper_command(width=max_gripper_width, speed=speed, force=force)
+                success = self.gripper.apply_gripper_command(width=width, speed=speed, force=force)
                 if command.get("blocking", True):
                     success = self._spin_until_done()
-                return {"success": success}
+                return {"success": success, "error": "" if success else "Failed to open gripper"}
 
-            elif action == "close":
+            elif cmd == "close_gripper":
+                # Use width from command, or default to 0.0 (full close)
+                width = command.get("width", 0.0)
                 speed = command.get("speed", 0.05)
                 force = command.get("force", 0.1)
-                success = self.gripper.apply_gripper_command(width=0.0, speed=speed, force=force)
+                success = self.gripper.apply_gripper_command(width=width, speed=speed, force=force)
                 if command.get("blocking", True):
                     success = self._spin_until_done()
-                return {"success": success}
+                return {"success": success, "error": "" if success else "Failed to close gripper"}
 
-            elif action == "get_state":
+            elif cmd == "get_gripper_state":
                 state = self.gripper.get_gripper_state()
                 return {"success": True, "state": state}
 
-            elif action == "shutdown":
+            elif cmd == "shutdown":
                 self.running = False
                 return {"success": True, "message": "Server shutting down"}
 
             else:
-                return {"success": False, "error": f"Unknown action: {action}"}
+                return {"success": False, "error": f"Unknown command: {cmd}"}
 
         except Exception as e:
             logging.error(f"Error handling command {command}: {e}")

@@ -28,6 +28,13 @@ def main() -> None:
         default=5559,
         help="Gripper port",
     )
+    parser.add_argument(
+        "--gripper-type",
+        type=str,
+        default="robotiq",
+        choices=["robotiq", "franka"],
+        help="Gripper type (default: robotiq)",
+    )
     args = parser.parse_args()
 
     # Connect to bamboo control node and gripper server
@@ -35,6 +42,7 @@ def main() -> None:
         control_port=args.control_port,
         server_ip=args.server_ip,
         gripper_port=args.gripper_port,
+        gripper_type=args.gripper_type,
     ) as client:
         print("Connected to bamboo client!")
 
