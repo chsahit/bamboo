@@ -246,6 +246,8 @@ class BambooFrankaClient:
             gripper_is_moving = gripper_result["state"]["is_moving"]
         else:
             gripper_state = 0.0  # No gripper enabled
+            gripper_is_grasped = False
+            gripper_is_moving = False
 
         return {
             "ee_pose": ee_pose,
