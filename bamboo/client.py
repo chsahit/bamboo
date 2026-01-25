@@ -470,7 +470,7 @@ class BambooFrankaClient:
                 error_msg = response.get("error", "Trajectory execution failed")
                 _log.error(
                     f"Trajectory failed: {error_msg}. \n"
-                    f" Please restart the controller node on the machine connected to the robot."
+                    f" You may have to restart the controller node on the machine connected to the robot."
                 )
                 return {"success": False, "error": error_msg}
 

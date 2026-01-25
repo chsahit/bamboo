@@ -570,7 +570,8 @@ private:
       return true;
     } catch (const franka::ControlException &e) {
       std::cerr << "[TRAJECTORY] Control exception: " << e.what() << std::endl;
-      std::cerr << "You may have to restart the controller by ending this tmux session "
+      std::cerr << "[TRAJECTORY] Resetting Error State" << std::endl;
+      std::cerr << "[Trajectory] If errors persist, you may have to restart the controller by ending this tmux session "
                    "and running RunBambooController"
                 << std::endl;
       robot_->automaticErrorRecovery();
