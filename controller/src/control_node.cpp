@@ -95,8 +95,8 @@ public:
                       franka::Gripper *gripper,
                       bamboo::controllers::JointImpedanceController *controller,
                       bamboo::interpolators::JointInterpolator *interpolator)
-      : robot_(robot), model_(model), gripper_(gripper), controller_(controller),
-        interpolator_(interpolator) {
+      : robot_(robot), model_(model), gripper_(gripper),
+        controller_(controller), interpolator_(interpolator) {
 
     // Get initial robot state
     franka::RobotState init_state = robot_->readOnce();
@@ -261,20 +261,24 @@ public:
   }
 
   bool OpenGripper(double width, double speed) {
-    std::cout << "[SERVER] Opening gripper to width: " << width << "m, speed: " << speed << "m/s" << std::endl;
+    std::cout << "[SERVER] Opening gripper to width: " << width
+              << "m, speed: " << speed << "m/s" << std::endl;
     try {
       if (!gripper_) {
         throw std::runtime_error("Gripper not initialized");
       }
       return gripper_->move(width, speed);
     } catch (const franka::Exception &e) {
-      std::cerr << "[SERVER] Franka exception during gripper open: " << e.what() << std::endl;
+      std::cerr << "[SERVER] Franka exception during gripper open: " << e.what()
+                << std::endl;
       throw;
     }
   }
 
   bool CloseGripper(double width, double speed, double force) {
-    std::cout << "[SERVER] Closing gripper: width=" << width << "m, speed=" << speed << "m/s, force=" << force << "N" << std::endl;
+    std::cout << "[SERVER] Closing gripper: width=" << width
+              << "m, speed=" << speed << "m/s, force=" << force << "N"
+              << std::endl;
     try {
       if (!gripper_) {
         throw std::runtime_error("Gripper not initialized");
@@ -288,7 +292,8 @@ public:
         return gripper_->move(width, speed);
       }
     } catch (const franka::Exception &e) {
-      std::cerr << "[SERVER] Franka exception during gripper close: " << e.what() << std::endl;
+      std::cerr << "[SERVER] Franka exception during gripper close: "
+                << e.what() << std::endl;
       throw;
     }
   }
@@ -308,7 +313,8 @@ public:
 
       return result;
     } catch (const franka::Exception &e) {
-      std::cerr << "[SERVER] Franka exception reading gripper state: " << e.what() << std::endl;
+      std::cerr << "[SERVER] Franka exception reading gripper state: "
+                << e.what() << std::endl;
       throw;
     }
   }
@@ -692,11 +698,12 @@ msgpack::sbuffer handleExecuteTrajectory(
   return response_buf;
 }
 
-msgpack::sbuffer handleOpenGripper(BambooControlServer &server,
-                                    const std::map<std::string, msgpack::object> &request_map) {
+msgpack::sbuffer
+handleOpenGripper(BambooControlServer &server,
+                  const std::map<std::string, msgpack::object> &request_map) {
   // Parse gripper parameters
-  double width = 0.08;  // Default max width for Franka Hand
-  double speed = 0.05;  // Default speed
+  double width = 0.08; // Default max width for Franka Hand
+  double speed = 0.05; // Default speed
 
   auto it_width = request_map.find("width");
   if (it_width != request_map.end()) {
@@ -726,12 +733,13 @@ msgpack::sbuffer handleOpenGripper(BambooControlServer &server,
   return response_buf;
 }
 
-msgpack::sbuffer handleCloseGripper(BambooControlServer &server,
-                                     const std::map<std::string, msgpack::object> &request_map) {
+msgpack::sbuffer
+handleCloseGripper(BambooControlServer &server,
+                   const std::map<std::string, msgpack::object> &request_map) {
   // Parse gripper parameters
-  double width = 0.0;   // Default to full close/grasp
-  double speed = 0.05;  // Default speed
-  double force = 20.0;  // Default force in Newtons
+  double width = 0.0;  // Default to full close/grasp
+  double speed = 0.05; // Default speed
+  double force = 20.0; // Default force in Newtons
 
   auto it_width = request_map.find("width");
   if (it_width != request_map.end()) {
@@ -923,7 +931,7 @@ int main(int argc, char **argv) {
 
   std::string robot_ip;
   std::string port;
-  std::string listen_address = "*"; // default
+  std::string listen_address = "*";  // default
   std::string gripper_type = "none"; // default: no gripper control in C++ node
   bool use_min_jerk = false;
 
@@ -949,7 +957,8 @@ int main(int argc, char **argv) {
     case '?':
     default:
       std::cerr << "Usage: " << argv[0]
-                << " -r <robot-ip> -p <port> [-l <listen-address>] [-g <gripper-type>] [-m]"
+                << " -r <robot-ip> -p <port> [-l <listen-address>] [-g "
+                   "<gripper-type>] [-m]"
                 << std::endl;
       std::cerr << "  -r: Robot IP address (required)" << std::endl;
       std::cerr << "  -p: Port number (required)" << std::endl;
@@ -968,7 +977,8 @@ int main(int argc, char **argv) {
   if (robot_ip.empty() || port.empty()) {
     std::cerr << "Error: Robot IP and port are required" << std::endl;
     std::cerr << "Usage: " << argv[0]
-              << " -r <robot-ip> -p <port> [-l <listen-address>] [-g <gripper-type>] [-m]"
+              << " -r <robot-ip> -p <port> [-l <listen-address>] [-g "
+                 "<gripper-type>] [-m]"
               << std::endl;
     return -1;
   }
@@ -1005,7 +1015,7 @@ int main(int argc, char **argv) {
     franka::Model model = robot.loadModel();
 
     // Conditionally connect to gripper based on gripper_type
-    franka::Gripper* gripper_ptr = nullptr;
+    franka::Gripper *gripper_ptr = nullptr;
     std::unique_ptr<franka::Gripper> gripper_holder;
 
     if (gripper_type == "franka") {
@@ -1018,7 +1028,8 @@ int main(int argc, char **argv) {
       gripper_ptr->homing();
       std::cout << "Franka Hand gripper ready" << std::endl;
     } else {
-      std::cout << "No gripper control in C++ node (gripper_type=none)" << std::endl;
+      std::cout << "No gripper control in C++ node (gripper_type=none)"
+                << std::endl;
     }
 
     // Create controller and interpolator
@@ -1029,7 +1040,8 @@ int main(int argc, char **argv) {
     bamboo::interpolators::JointInterpolator interpolator(interp_type);
 
     // Start server
-    RunServer(server_address, &robot, &model, gripper_ptr, &controller, &interpolator);
+    RunServer(server_address, &robot, &model, gripper_ptr, &controller,
+              &interpolator);
 
     std::cout << "Control node terminated successfully" << std::endl;
 
