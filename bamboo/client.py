@@ -34,7 +34,12 @@ class JointStates(TypedDict, total=False):
 
     ee_pose: list[list[float]]
     qpos: list[float]
+    dq: list[float]
+    tau_J: list[float]
+    time_sec: float
     gripper_state: float
+    gripper_is_grasped: bool
+    gripper_is_moving: bool
 
 
 class BambooFrankaClient:
@@ -213,7 +218,7 @@ class BambooFrankaClient:
         """Get current robot joint states.
 
         Returns:
-            Dict with 'ee_pose', 'qpos', 'gripper_state'
+            Dict with 'ee_pose', 'qpos', 'dq', 'tau_J', 'time_sec', 'gripper_state'
 
         Raises:
             BambooConnectionError: If connection to controller fails
@@ -226,6 +231,15 @@ class BambooFrankaClient:
         # Extract joint positions
         qpos = list(state_msg["q"])  # Convert to list for JSON serialization
 
+        # Extract joint velocities
+        dq = list(state_msg["dq"])
+
+        # Extract joint torques
+        tau_J = list(state_msg["tau_J"])
+
+        # Extract timestamp
+        time_sec = float(state_msg["time_sec"])
+
         # Extract end-effector pose (4x4 transformation matrix)
         # Convert flat array to 4x4 matrix (column-major)
         ee_pose_flat = list(state_msg["O_T_EE"])
@@ -235,18 +249,27 @@ class BambooFrankaClient:
 
         # Get gripper state if available, otherwise use default
         if self.enable_gripper:
-            try:
-                gripper_result = self.get_gripper_state()
-                if gripper_result.get("success"):
-                    gripper_state = gripper_result["state"]["width"]
-                else:
-                    gripper_state = 0.0  # Gripper command failed
-            except Exception:
-                gripper_state = 0.0  # Gripper not available
+            gripper_result = self.get_gripper_state()
+            if not gripper_result.get("success"):
+                raise BambooGripperError(f"Failed to get gripper state: {gripper_result.get('error', 'Unknown error')}")
+            gripper_state = gripper_result["state"]["width"]
+            gripper_is_grasped = gripper_result["state"].get("is_grasped", False)
+            gripper_is_moving = gripper_result["state"].get("is_moving", False)
         else:
             gripper_state = 0.0  # No gripper enabled
+            gripper_is_grasped = False
+            gripper_is_moving = False
 
-        return {"ee_pose": ee_pose, "qpos": qpos, "gripper_state": gripper_state}
+        return {
+            "ee_pose": ee_pose,
+            "qpos": qpos,
+            "dq": dq,
+            "tau_J": tau_J,
+            "time_sec": time_sec,
+            "gripper_state": gripper_state,
+            "gripper_is_grasped": gripper_is_grasped,
+            "gripper_is_moving": gripper_is_moving,
+        }
 
     def close(self) -> None:
         """Clean up ZMQ resources."""
@@ -336,12 +359,48 @@ class BambooFrankaClient:
         except zmq.Again:
             raise BambooTimeoutError("Timeout waiting for gripper server response") from None
 
+    def _validate_gains(
+        self, joint_confs: np.ndarray, gains: np.ndarray | None, label: str
+    ) -> list[list[float]] | None:
+        gains_per_waypoint = None
+        if gains is not None:
+            if not isinstance(gains, np.ndarray):
+                raise TypeError(f"{label} must be a numpy array, got {type(gains)}")
+
+            # Validate non-negative
+            if np.any(gains < 0):
+                raise ValueError(f"All {label} values must be >= 0, got min value {gains.min()}")
+
+            if gains.ndim == 1:
+                # Single array of 7 values for all waypoints
+                if gains.shape[0] != 7:
+                    raise ValueError(f"{label} must have shape (7,), got {gains.shape}")
+                # Broadcast to all waypoints - convert to list for each waypoint
+                gains_per_waypoint = [gains.tolist()] * joint_confs.shape[0]
+            elif gains.ndim == 2:
+                # Per-waypoint gains
+                if gains.shape[0] != joint_confs.shape[0]:
+                    raise ValueError(
+                        f"{label} must have same number of rows as joint_confs "
+                        f"({joint_confs.shape[0]}), got {gains.shape[0]}"
+                    )
+                if gains.shape[1] != 7:
+                    raise ValueError(f"{label} must have 7 columns, got {gains.shape[1]}")
+                # Convert each row to list
+                gains_per_waypoint = [gains[i].tolist() for i in range(gains.shape[0])]
+            else:
+                raise ValueError(f"{label} must be 1D or 2D array, got {gains.ndim}D")
+
+        return gains_per_waypoint
+
     def execute_joint_impedance_path(
         self,
         joint_confs: np.ndarray,
         joint_vels: np.ndarray | None = None,
         durations: list | None = None,
         default_duration: float = 0.5,
+        kp: np.ndarray | None = None,
+        kd: np.ndarray | None = None,
     ) -> dict[str, bool | str]:
         """Execute joint impedance trajectory and wait for completion.
 
@@ -352,6 +411,14 @@ class BambooFrankaClient:
                       If None, all waypoints use default_duration.
                       If shorter than joint_confs, remaining waypoints use default_duration.
             default_duration: Default duration in seconds for waypoints (default: 1.0s)
+            kp: Optional stiffness gains. Can be:
+                - None: Use controller's tuned defaults for all waypoints
+                - np.ndarray of shape (7,): Use same custom gains for all waypoints
+                - np.ndarray of shape (n, 7): Use different gains per waypoint
+            kd: Optional damping gains. Can be:
+                - None: Use controller's tuned defaults for all waypoints
+                - np.ndarray of shape (7,): Use same custom gains for all waypoints
+                - np.ndarray of shape (n, 7): Use different gains per waypoint
 
         Returns:
             Dict with 'success' (bool) and 'error' (str) if failed
@@ -364,6 +431,10 @@ class BambooFrankaClient:
                 raise ValueError(f"joint_confs must have 7 columns, got {joint_confs.shape[1]}")
 
             _log.debug(f"Executing {joint_confs.shape[0]} joint waypoints")
+
+            # Validate kp and kd
+            kp_per_waypoint = self._validate_gains(joint_confs, kp, "kp")
+            kd_per_waypoint = self._validate_gains(joint_confs, kd, "kd")
 
             # Validate joint_vels parameter
             if joint_vels is None:
@@ -397,9 +468,12 @@ class BambooFrankaClient:
                     "q_goal": joint_conf.tolist(),
                     "velocity": joint_vel.tolist(),
                     "duration": waypoint_duration,
-                    "kp": [600.0] * 7,  # Default stiffness
-                    "kd": [50.0] * 7,  # Default damping
                 }
+
+                if kp_per_waypoint is not None:
+                    waypoint["kp"] = kp_per_waypoint[i]
+                if kd_per_waypoint is not None:
+                    waypoint["kd"] = kd_per_waypoint[i]
 
                 waypoints.append(waypoint)
 
@@ -439,7 +513,10 @@ class BambooFrankaClient:
                 return {"success": True}
             else:
                 error_msg = response.get("error", "Trajectory execution failed")
-                _log.error(f"Trajectory failed: {error_msg}")
+                _log.error(
+                    f"Trajectory failed: {error_msg}. \n"
+                    f" You may have to restart the controller node on the machine connected to the robot."
+                )
                 return {"success": False, "error": error_msg}
 
         except zmq.Again:

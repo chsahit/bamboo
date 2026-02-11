@@ -12,6 +12,10 @@ JointImpedanceController::JointImpedanceController(franka::Model *model)
   Kp_ << 875.0, 1050.0, 1050.0, 875.0, 175.0, 350.0, 87.5;
   Kd_ << 37.5, 50.0, 37.5, 25.0, 5.0, 3.75, 2.5;
 
+  // Store default gains for later restoration
+  Kp_default_ = Kp_;
+  Kd_default_ = Kd_;
+
   joint_tau_limits_ << 60.0, 60.0, 60.0, 60.0, 30.0, 15.0, 15.0;
 
   smoothed_q_.setZero();
@@ -22,6 +26,11 @@ void JointImpedanceController::SetGains(const std::array<double, 7> &kp,
                                         const std::array<double, 7> &kd) {
   Kp_ = Eigen::Map<const Eigen::Matrix<double, 7, 1>>(kp.data());
   Kd_ = Eigen::Map<const Eigen::Matrix<double, 7, 1>>(kd.data());
+}
+
+void JointImpedanceController::RestoreDefaultGains() {
+  Kp_ = Kp_default_;
+  Kd_ = Kd_default_;
 }
 
 ControllerResult
