@@ -7,7 +7,7 @@ name = "bamboo-franka-controller"
 version = "0.1.0"
 description = "Bamboo Franka Robot Control with Joint Impedance Control"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Bamboo Development Team"},
 ]
@@ -15,7 +15,6 @@ keywords = ["robotics", "franka", "control", "impedance", "robot"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
@@ -44,10 +43,15 @@ dev = [
     "pre-commit>=3.0.0",
     "ruff>=0.6.0",
     "mypy>=1.0.0",
+    # Build and publish tools
+    "build",
+    "twine",
 ]
 
 [project.urls]
 Homepage = "https://github.com/chsahit/bamboo"
+Repository = "https://github.com/chsahit/bamboo"
+Issues = "https://github.com/chsahit/bamboo/issues"
 
 [tool.setuptools]
 package-dir = {"" = "."}
