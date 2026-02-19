@@ -73,3 +73,6 @@ Thumbs.db
 
 # libfranka
 third_party/
+
+# PyPI credentials
+.pypirc
