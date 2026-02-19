@@ -47,6 +47,12 @@ If you prefer to install manually, refer to the steps in the [`InstallBambooCont
 
 You should install the Bamboo client on any machine that will talk to the control node. This installation only includes the client dependencies (numpy, pyzmq, msgpack) and not the hardware control dependencies.
 
+**Install from PyPI:**
+
+```bash
+pip install bamboo-franka-client
+```
+
 **Install from GitHub repository:**
 
 ```bash
