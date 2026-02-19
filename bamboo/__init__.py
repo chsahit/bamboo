@@ -9,8 +9,8 @@ from importlib.metadata import metadata, version
 
 from bamboo.client import BambooFrankaClient
 
-__version__ = version("bamboo-franka-controller")
-_metadata = metadata("bamboo-franka-controller")
+__version__ = version("bamboo-franka-client")
+_metadata = metadata("bamboo-franka-client")
 _authors = _metadata.get_all("Author")
 __author__ = ", ".join(_authors) if _authors else "Bamboo Development Team"
 
