@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bamboo-franka-controller"
+name = "bamboo-franka"
 version = "0.1.0"
 description = "Bamboo Franka Robot Control with Joint Impedance Control"
 readme = "README.md"

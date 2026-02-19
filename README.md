@@ -50,7 +50,7 @@ You should install the Bamboo client on any machine that will talk to the contro
 **Install from PyPI:**
 
 ```bash
-pip install bamboo-franka-controller
+pip install bamboo-franka
 ```
 
 **Install from GitHub repository:**

@@ -46,4 +46,4 @@ python -c "from bamboo import BambooFrankaClient; print('OK')"
 
 ## Adding Maintainers
 
-Go to https://pypi.org/manage/project/bamboo-franka-controller/collaboration/ and add their PyPI username. They'll then create their own API token.
+Go to https://pypi.org/manage/project/bamboo-franka/collaboration/ and add their PyPI username. They'll then create their own API token.
