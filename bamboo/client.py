@@ -582,7 +582,6 @@ class BambooFrankaClient:
         if self.gripper_type == "franka":
             command = {
                 "command": "close_gripper",
-                "width": 0.0,  # Full close/grasp
                 "speed": speed,
                 "force": force,  # Will be converted to Newtons in C++ (5-70N)
             }
@@ -590,7 +589,6 @@ class BambooFrankaClient:
         else:
             command = {
                 "command": "close_gripper",
-                "width": 0.0,  # Full close
                 "speed": speed,
                 "force": force,
                 "blocking": blocking,

@@ -275,24 +275,17 @@ public:
     }
   }
 
-  bool CloseGripper(double width, double speed, double force) {
-    std::cout << "[SERVER] Closing gripper: width=" << width
-              << "m, speed=" << speed << "m/s, force=" << force << "N"
-              << std::endl;
+  bool CloseGripper(double speed, double force) {
+    std::cout << "[SERVER] Closing gripper: speed=" << speed
+              << "m/s, force=" << force << "N" << std::endl;
     try {
       if (!gripper_) {
         throw std::runtime_error("Gripper not initialized");
       }
-
-      // If width is very small, use grasp
-      if (width < 0.005) {
-        // epsilon is set such that the grasp succeeds if the gripper_width is
-        // b/w (width - 0.08, width + 0.08). this way we don't throw when
-        // grasping large objects
-        return gripper_->grasp(width, speed, force, 0.08, 0.08);
-      } else {
-        return gripper_->move(width, speed);
-      }
+      // epsilon is set such that the grasp succeeds if the gripper_width is
+      // b/w (0.0 - 0.08, 0.0 + 0.08). this way we don't throw when
+      // grasping large objects
+      return gripper_->grasp(0.0, speed, force, 0.08, 0.08);
     } catch (const franka::Exception &e) {
       std::cerr << "[SERVER] Franka exception during gripper close: "
                 << e.what() << std::endl;
@@ -736,14 +729,8 @@ msgpack::sbuffer
 handleCloseGripper(BambooControlServer &server,
                    const std::map<std::string, msgpack::object> &request_map) {
   // Parse gripper parameters
-  double width = 0.0;  // Default to full close/grasp
   double speed = 0.05; // Default speed
   double force = 20.0; // Default force in Newtons
-
-  auto it_width = request_map.find("width");
-  if (it_width != request_map.end()) {
-    it_width->second.convert(width);
-  }
 
   auto it_speed = request_map.find("speed");
   if (it_speed != request_map.end()) {
@@ -758,7 +745,7 @@ handleCloseGripper(BambooControlServer &server,
     force = 5.0 + force_normalized * 65.0;
   }
 
-  bool success = server.CloseGripper(width, speed, force);
+  bool success = server.CloseGripper(speed, force);
 
   msgpack::sbuffer response_buf;
   msgpack::packer<msgpack::sbuffer> packer(response_buf);
