@@ -60,7 +60,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --robot_ip  IP          Robot IP address (default: $ROBOT_IP)"
       echo "  --control_port PORT     Control node ZMQ port (default: $ROBOT_PORT)"
       echo "  --listen_ip IP          ZMQ server listen address (default: $LISTEN_ADDR)"
-      echo "  --gripper_device DEV    Gripper device for Robotiq (default: $GRIPPER_DEVICE)"
+      echo "  --gripper_device DEV    Gripper device if using Robotiq (default: $GRIPPER_DEVICE)"
       echo "  --gripper_port PORT     Gripper server ZMQ port (default: $GRIPPER_PORT)"
       echo "  --gripper_type TYPE     Gripper type: 'robotiq' or 'franka' (default: $GRIPPER_TYPE)"
       echo "  --conda_env ENV         Conda environment name for gripper server (default: $CONDA_ENV)"
@@ -116,16 +116,11 @@ start_servers() {
     fi
 
     # Validate gripper configuration
-    if [[ "$GRIPPER_TYPE" == "franka" ]]; then
-        if [[ -z "$ROBOT_IP" ]]; then
-            echo "❌ Error: --robot_ip required for Franka Hand gripper"
-            return 1
-        fi
-    elif [[ "$GRIPPER_TYPE" == "robotiq" ]]; then
-        if [[ ! -e "$GRIPPER_DEVICE" ]]; then
+    if [[ "$GRIPPER_TYPE" == "robotiq" ]]; then
+        if [[ ! -e "$GRIPPER_DEVICE" ]]; then  # test if gripper device is connected
             echo "⚠️  Warning: Gripper device $GRIPPER_DEVICE not found"
         fi
-    else
+    elif [[ "$GRIPPER_TYPE" != "franka" ]]; then
         echo "❌ Error: Invalid gripper type '$GRIPPER_TYPE'. Must be 'robotiq' or 'franka'"
         return 1
     fi

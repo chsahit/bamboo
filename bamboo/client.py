@@ -85,8 +85,6 @@ class BambooFrankaClient:
 
         # For Robotiq, create separate gripper socket to gripper_server
         # For Franka, gripper commands go through control_socket to control_node
-        # For Robotiq, create separate gripper socket to gripper_server
-        # For Franka, gripper commands go through control_socket to control_node
         if enable_gripper and gripper_type == "robotiq":
             # Set up ZMQ socket for gripper commands (REQ socket for request-response)
             self.gripper_socket = self.zmq_context.socket(zmq.REQ)
@@ -253,8 +251,8 @@ class BambooFrankaClient:
             if not gripper_result.get("success"):
                 raise BambooGripperError(f"Failed to get gripper state: {gripper_result.get('error', 'Unknown error')}")
             gripper_state = gripper_result["state"]["width"]
-            gripper_is_grasped = gripper_result["state"].get("is_grasped", False)
-            gripper_is_moving = gripper_result["state"].get("is_moving", False)
+            gripper_is_grasped = gripper_result["state"]["is_grasped"]
+            gripper_is_moving = gripper_result["state"]["is_moving"]
         else:
             gripper_state = 0.0  # No gripper enabled
             gripper_is_grasped = False
@@ -296,7 +294,7 @@ class BambooFrankaClient:
     def get_joint_positions(self) -> list[float]:
         return self.get_joint_states()["qpos"]
 
-    def _send_control_command(self, command: dict, timeout_ms: int = 5000) -> dict:
+    def _send_panda_hand_command(self, command: dict, timeout_ms: int = 5000) -> dict:
         """Send a command to the control node.
 
         Args:
@@ -330,7 +328,7 @@ class BambooFrankaClient:
         except zmq.Again:
             raise BambooTimeoutError("Timeout waiting for control node response") from None
 
-    def _send_gripper_command(self, command: dict) -> dict:
+    def _send_robotiq_command(self, command: dict) -> dict:
         """Send a command to the gripper server.
 
         Args:
@@ -532,12 +530,12 @@ class BambooFrankaClient:
         """Open the gripper.
 
         Args:
-            speed: Gripper opening speed (m/s, typically 0.01-0.1)
-            force: Gripper force (0.0 to 1.0, for Robotiq compatibility)
+            speed: Gripper opening speed (0.0 to 1.0 for robotiq, 0.01 to 0.1 for panda hand)
+            force: Gripper force (Robotiq only)
             blocking: Whether to block until gripper finishes (Robotiq only, Franka always blocks)
 
         Returns:
-            Dict with response from gripper server or control node
+            Dict with response from gripper
 
         Raises:
             BambooGripperError: If gripper not enabled or command fails
@@ -546,17 +544,14 @@ class BambooFrankaClient:
         if not self.enable_gripper:
             raise BambooGripperError("Gripper not enabled")
 
-        # Standardized command format
         if self.gripper_type == "franka":
-            # Franka: route to control node
             command = {
                 "command": "open_gripper",
                 "width": 0.08,  # Max width for Franka Hand
                 "speed": speed,
             }
-            return self._send_control_command(command)
+            return self._send_panda_hand_command(command)
         else:
-            # Robotiq: route to gripper server
             command = {
                 "command": "open_gripper",
                 "width": 0.085,  # Max width for Robotiq 2F-85
@@ -564,18 +559,18 @@ class BambooFrankaClient:
                 "force": force,
                 "blocking": blocking,
             }
-            return self._send_gripper_command(command)
+            return self._send_robotiq_command(command)
 
     def close_gripper(self, speed: float = 0.05, force: float = 0.8, blocking: bool = True) -> dict:
         """Close the gripper.
 
         Args:
-            speed: Gripper closing speed (m/s, typically 0.01-0.1)
+            speed: Gripper closing speed (0.0 to 1.0 for robotiq, 0.01 to 0.1 for panda hand)
             force: Gripper force (0.0 to 1.0, mapped to 5-70N for Franka)
             blocking: Whether to block until gripper finishes (Robotiq only, Franka always blocks)
 
         Returns:
-            Dict with response from gripper server or control node or control node
+            Dict with response from gripper
 
         Raises:
             BambooGripperError: If gripper not enabled or command fails
@@ -584,18 +579,15 @@ class BambooFrankaClient:
         if not self.enable_gripper:
             raise BambooGripperError("Gripper not enabled")
 
-        # Standardized command format
         if self.gripper_type == "franka":
-            # Franka: route to control node
             command = {
                 "command": "close_gripper",
                 "width": 0.0,  # Full close/grasp
                 "speed": speed,
                 "force": force,  # Will be converted to Newtons in C++ (5-70N)
             }
-            return self._send_control_command(command)
+            return self._send_panda_hand_command(command)
         else:
-            # Robotiq: route to gripper server
             command = {
                 "command": "close_gripper",
                 "width": 0.0,  # Full close
@@ -603,13 +595,13 @@ class BambooFrankaClient:
                 "force": force,
                 "blocking": blocking,
             }
-            return self._send_gripper_command(command)
+            return self._send_robotiq_command(command)
 
     def get_gripper_state(self) -> dict:
         """Get current gripper state.
 
         Returns:
-            Dict with 'success' and 'state' from gripper server or control node or control node
+            Dict with 'success' and 'state' from gripper
 
         Raises:
             BambooGripperError: If gripper not enabled or command fails
@@ -618,15 +610,12 @@ class BambooFrankaClient:
         if not self.enable_gripper:
             raise BambooGripperError("Gripper not enabled")
 
-        # Standardized command format
         command = {"command": "get_gripper_state"}
 
         if self.gripper_type == "franka":
-            # Franka: route to control node
-            return self._send_control_command(command)
+            return self._send_panda_hand_command(command)
         else:
-            # Robotiq: route to gripper server
-            return self._send_gripper_command(command)
+            return self._send_robotiq_command(command)
 
 
 def main() -> None:

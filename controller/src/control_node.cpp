@@ -286,7 +286,9 @@ public:
 
       // If width is very small, use grasp
       if (width < 0.005) {
-        // epsilon_inner and epsilon_outer define grasp width tolerance
+        // epsilon is set such that the grasp succeeds if the gripper_width is
+        // b/w (width - 0.08, width + 0.08). this way we don't throw when
+        // grasping large objects
         return gripper_->grasp(width, speed, force, 0.08, 0.08);
       } else {
         return gripper_->move(width, speed);
@@ -309,6 +311,9 @@ public:
       result["width"] = state.width;
       result["max_width"] = state.max_width;
       result["is_grasped"] = state.is_grasped ? 1.0 : 0.0;
+      // open_gripper and close_gripper are blocking, so the gripper is never
+      // mid-motion when queried.
+      result["is_moving"] = 0.0;
       result["temperature"] = state.temperature;
 
       return result;
@@ -720,15 +725,9 @@ handleOpenGripper(BambooControlServer &server,
   msgpack::sbuffer response_buf;
   msgpack::packer<msgpack::sbuffer> packer(response_buf);
 
-  packer.pack_map(2);
+  packer.pack_map(1);
   packer.pack("success");
   packer.pack(success);
-  packer.pack("error");
-  if (!success) {
-    packer.pack(std::string("Failed to open gripper"));
-  } else {
-    packer.pack(std::string(""));
-  }
 
   return response_buf;
 }
@@ -764,15 +763,9 @@ handleCloseGripper(BambooControlServer &server,
   msgpack::sbuffer response_buf;
   msgpack::packer<msgpack::sbuffer> packer(response_buf);
 
-  packer.pack_map(2);
+  packer.pack_map(1);
   packer.pack("success");
   packer.pack(success);
-  packer.pack("error");
-  if (!success) {
-    packer.pack(std::string("Failed to close gripper"));
-  } else {
-    packer.pack(std::string(""));
-  }
 
   return response_buf;
 }
