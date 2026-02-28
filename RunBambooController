@@ -163,7 +163,7 @@ start_servers() {
         tmux send-keys -t "$SESSION:0.1" "cd \"$SCRIPT_DIR/controller\"" C-m
 
         # Build gripper command for Robotiq
-        GRIPPER_CMD="python gripper_server.py --gripper-type robotiq --gripper-port $GRIPPER_DEVICE --zmq-port $GRIPPER_PORT"
+        GRIPPER_CMD="python gripper_server.py --gripper-port $GRIPPER_DEVICE --zmq-port $GRIPPER_PORT"
         tmux send-keys -t "$SESSION:0.1" "$GRIPPER_CMD" C-m
 
         # Set pane titles
