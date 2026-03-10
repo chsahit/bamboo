@@ -51,6 +51,7 @@ class BambooFrankaClient:
         server_ip: str = "localhost",
         gripper_port: int = 5559,
         enable_gripper: bool = True,
+        gripper_type: str = "robotiq",
     ):
         """Initialize Bamboo Franka Client.
 
@@ -59,9 +60,17 @@ class BambooFrankaClient:
             server_ip: IP address of the bamboo control node server
             gripper_port: ZMQ port of the gripper server (default: 5559)
             enable_gripper: Whether to enable gripper commands
+            gripper_type: Type of gripper - "robotiq" or "franka" (default: "robotiq")
         """
         self.control_port = control_port
         self.server_ip = server_ip
+        self.gripper_port = gripper_port
+        self.enable_gripper = enable_gripper
+        self.gripper_type = gripper_type
+
+        # Validate gripper type
+        if gripper_type not in ["robotiq", "franka"]:
+            raise ValueError(f"Invalid gripper_type '{gripper_type}'. Must be 'robotiq' or 'franka'")
 
         # Set up ZMQ context and control socket
         self.zmq_context = zmq.Context()
@@ -72,11 +81,11 @@ class BambooFrankaClient:
         self.control_socket.setsockopt(zmq.RCVTIMEO, 5000)  # 5 second timeout
         _log.debug(f"Control client connected to {self.server_ip}:{self.control_port}")
 
-        self.gripper_port = gripper_port
-        self.enable_gripper = enable_gripper
         self.gripper_socket = None
 
-        if enable_gripper:
+        # For Robotiq, create separate gripper socket to gripper_server
+        # For Franka, gripper commands go through control_socket to control_node
+        if enable_gripper and gripper_type == "robotiq":
             # Set up ZMQ socket for gripper commands (REQ socket for request-response)
             self.gripper_socket = self.zmq_context.socket(zmq.REQ)
             self.gripper_socket.connect(f"tcp://{self.server_ip}:{gripper_port}")
@@ -126,8 +135,8 @@ class BambooFrankaClient:
             self.zmq_context = zmq.Context()
             self.control_socket = self.zmq_context.socket(zmq.REQ)
 
-            # Recreate gripper socket if it was enabled
-            if self.enable_gripper:
+            # Recreate gripper socket if it was enabled and gripper type is robotiq
+            if self.enable_gripper and self.gripper_type == "robotiq":
                 self.gripper_socket = self.zmq_context.socket(zmq.REQ)
                 self.gripper_socket.connect(f"tcp://{self.server_ip}:{self.gripper_port}")
                 self.gripper_socket.setsockopt(zmq.RCVTIMEO, 5000)
@@ -237,8 +246,8 @@ class BambooFrankaClient:
         ee_pose = ee_pose_matrix.T.tolist()
 
         # Get gripper state if available, otherwise use default
-        if self.enable_gripper and self.gripper_socket is not None:
-            gripper_result = self._send_gripper_command({"action": "get_state"})
+        if self.enable_gripper:
+            gripper_result = self.get_gripper_state()
             if not gripper_result.get("success"):
                 raise BambooGripperError(f"Failed to get gripper state: {gripper_result.get('error', 'Unknown error')}")
             gripper_state = gripper_result["state"]["width"]
@@ -285,7 +294,41 @@ class BambooFrankaClient:
     def get_joint_positions(self) -> list[float]:
         return self.get_joint_states()["qpos"]
 
-    def _send_gripper_command(self, command: dict) -> dict:
+    def _send_panda_hand_command(self, command: dict, timeout_ms: int = 5000) -> dict:
+        """Send a command to the control node.
+
+        Args:
+            command: Dict with command to send
+            timeout_ms: Timeout in milliseconds
+
+        Returns:
+            Dict with response from control node
+
+        Raises:
+            BambooTimeoutError: If command times out
+        """
+        try:
+            # Save old timeout
+            old_timeout = self.control_socket.getsockopt(zmq.RCVTIMEO)
+            self.control_socket.setsockopt(zmq.RCVTIMEO, timeout_ms)
+
+            try:
+                # Send command
+                self.control_socket.send(msgpack.packb(command))
+
+                # Receive response
+                response_data = self.control_socket.recv()
+                response = msgpack.unpackb(response_data, raw=False)
+
+                return response  # type: ignore[no-any-return]
+            finally:
+                # Restore timeout
+                self.control_socket.setsockopt(zmq.RCVTIMEO, old_timeout)
+
+        except zmq.Again:
+            raise BambooTimeoutError("Timeout waiting for control node response") from None
+
+    def _send_robotiq_command(self, command: dict) -> dict:
         """Send a command to the gripper server.
 
         Args:
@@ -487,50 +530,90 @@ class BambooFrankaClient:
         """Open the gripper.
 
         Args:
-            speed: Gripper opening speed (0.0 to 1.0)
-            force: Gripper force (0.0 to 1.0)
-            blocking: Whether to block until gripper finishes
+            speed: Gripper opening speed (0.0 to 1.0 for robotiq, 0.01 to 0.1 for panda hand)
+            force: Gripper force (Robotiq only)
+            blocking: Whether to block until gripper finishes (Robotiq only, Franka always blocks)
 
         Returns:
-            Dict with response from gripper server
+            Dict with response from gripper
 
         Raises:
             BambooGripperError: If gripper not enabled or command fails
             BambooTimeoutError: If gripper command times out
         """
-        command = {"action": "open", "speed": speed, "force": force, "blocking": blocking}
-        return self._send_gripper_command(command)
+        if not self.enable_gripper:
+            raise BambooGripperError("Gripper not enabled")
+
+        if self.gripper_type == "franka":
+            command = {
+                "command": "open_gripper",
+                "width": 0.08,  # Max width for Franka Hand
+                "speed": speed,
+            }
+            return self._send_panda_hand_command(command)
+        else:
+            command = {
+                "command": "open_gripper",
+                "width": 0.085,  # Max width for Robotiq 2F-85
+                "speed": speed,
+                "force": force,
+                "blocking": blocking,
+            }
+            return self._send_robotiq_command(command)
 
     def close_gripper(self, speed: float = 0.05, force: float = 0.8, blocking: bool = True) -> dict:
         """Close the gripper.
 
         Args:
-            speed: Gripper closing speed (0.0 to 1.0)
-            force: Gripper force (0.0 to 1.0)
-            blocking: Whether to block until gripper finishes
+            speed: Gripper closing speed (0.0 to 1.0 for robotiq, 0.01 to 0.1 for panda hand)
+            force: Gripper force (0.0 to 1.0, mapped to 5-70N for Franka)
+            blocking: Whether to block until gripper finishes (Robotiq only, Franka always blocks)
 
         Returns:
-            Dict with response from gripper server
+            Dict with response from gripper
 
         Raises:
             BambooGripperError: If gripper not enabled or command fails
             BambooTimeoutError: If gripper command times out
         """
-        command = {"action": "close", "speed": speed, "force": force, "blocking": blocking}
-        return self._send_gripper_command(command)
+        if not self.enable_gripper:
+            raise BambooGripperError("Gripper not enabled")
+
+        if self.gripper_type == "franka":
+            command = {
+                "command": "close_gripper",
+                "speed": speed,
+                "force": force,  # Will be converted to Newtons in C++ (5-70N)
+            }
+            return self._send_panda_hand_command(command)
+        else:
+            command = {
+                "command": "close_gripper",
+                "speed": speed,
+                "force": force,
+                "blocking": blocking,
+            }
+            return self._send_robotiq_command(command)
 
     def get_gripper_state(self) -> dict:
         """Get current gripper state.
 
         Returns:
-            Dict with 'success' and 'state' from gripper server
+            Dict with 'success' and 'state' from gripper
 
         Raises:
             BambooGripperError: If gripper not enabled or command fails
             BambooTimeoutError: If gripper command times out
         """
-        command = {"action": "get_state"}
-        return self._send_gripper_command(command)
+        if not self.enable_gripper:
+            raise BambooGripperError("Gripper not enabled")
+
+        command = {"command": "get_gripper_state"}
+
+        if self.gripper_type == "franka":
+            return self._send_panda_hand_command(command)
+        else:
+            return self._send_robotiq_command(command)
 
 
 def main() -> None:
