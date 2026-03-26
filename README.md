@@ -87,15 +87,16 @@ bash RunBambooController
 
 The script supports configuration flags:
 ```bash
-bash RunBambooController start --robot_ip 172.16.0.2 --control_port 5555 --listen_ip "*" --gripper_device /dev/ttyUSB0 --gripper_port 5559 --conda_env bamboo
+bash RunBambooController start --robot_ip 172.16.0.2 --control_port 5555 --listen_ip "*" --gripper_type robotiq --gripper_device /dev/ttyUSB0 --gripper_port 5559 --conda_env bamboo
 ```
 
 Available options:
 - `--robot_ip`: Robot IP address (default: 172.16.0.2)
 - `--control_port`: Control node ZMQ port (default: 5555)
 - `--listen_ip`: ZMQ server listen address (default: * for all interfaces)
-- `--gripper_device`: Gripper device (default: /dev/ttyUSB0)
-- `--gripper_port`: Gripper server ZMQ port (default: 5559)
+- `--gripper_type`: Gripper type: `robotiq` or `franka` (default: robotiq). Use `franka` when using the built-in Franka Hand — the gripper is then managed directly by the C++ control node with no separate gripper server needed.
+- `--gripper_device`: Gripper serial device, only used when `--gripper_type robotiq` (default: /dev/ttyUSB0)
+- `--gripper_port`: Gripper server ZMQ port, only used when `--gripper_type robotiq` (default: 5559)
 - `--conda_env`: Conda environment name (default: bamboo)
 
 Other commands:
@@ -122,7 +123,7 @@ Example:
 ./bamboo_control_node -r 172.16.0.2 -p 5555 -l "*"
 ```
 
-Then in a new terminal, launch the Robotiq gripper server:
+**If using a Robotiq gripper**, launch the gripper server in a new terminal:
 ```bash
 conda activate bamboo
 cd controller
@@ -133,6 +134,8 @@ Example:
 ```bash
 python gripper_server.py --gripper-port /dev/ttyUSB0 --zmq-port 5559
 ```
+
+If using the Franka Hand, no separate gripper server is needed — it is managed directly by the control node.
 
 ### Client-Side Interface with robot and gripper
 You can verify the install by running some of the example scripts in a new terminal.
