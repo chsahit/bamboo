@@ -146,7 +146,8 @@ public:
   }
 
   bool ExecuteJointImpedanceTrajectory(
-      const bamboo_msgs::TrajectoryRequest &request) {
+      const bamboo_msgs::TrajectoryRequest &request,
+      std::vector<bamboo_msgs::StateRecord> &recorded_states) {
     std::cout << "[SERVER] Received trajectory with "
               << request.waypoints.size() << " waypoints" << std::endl;
 
@@ -243,7 +244,8 @@ public:
       // Execute entire trajectory in single control call
       bool success =
           executeTrajectory(trajectory_goals, trajectory_velocities,
-                            trajectory_durations, trajectory_kp, trajectory_kd);
+                            trajectory_durations, trajectory_kp, trajectory_kd,
+                            &recorded_states);
       if (!success) {
         throw std::runtime_error("Trajectory execution failed");
       }
@@ -324,7 +326,8 @@ private:
       const std::vector<double> &durations,
       const std::vector<std::optional<std::array<double, 7>>> &kp_per_waypoint,
       const std::vector<std::optional<std::array<double, 7>>>
-          &kd_per_waypoint) {
+          &kd_per_waypoint,
+      std::vector<bamboo_msgs::StateRecord> *recorded_states = nullptr) {
     if (goals.empty())
       return false;
 
@@ -350,6 +353,13 @@ private:
     // Final waypoint end-effector error tracking
     double final_ee_position_error_m = 0.0;
     double final_ee_orientation_error_rad = 0.0;
+
+    // State recording: capture q and O_T_EE every Nth control cycle (~20ms)
+    constexpr int record_every_n = 10;  // 500Hz / 10 = 50Hz
+    int record_counter = 0;
+    // Snapshot wall-clock time at trajectory start so each record can
+    // be expressed as wall-clock seconds-since-epoch.
+    auto wall_start = std::chrono::system_clock::now();
 
     // Initialize first waypoint
     q_goal_ = goals[0];
@@ -384,6 +394,22 @@ private:
 
         // Update current position
         q_current_ = Eigen::VectorXd::Map(robot_state.q.data(), 7);
+
+        // Record state snapshot at ~50Hz for trajectory playback
+        if (recorded_states != nullptr) {
+          record_counter++;
+          if (record_counter >= record_every_n) {
+            record_counter = 0;
+            bamboo_msgs::StateRecord rec;
+            auto wall_now = wall_start + std::chrono::duration<double>(control_time);
+            rec.time_sec = std::chrono::duration<double>(
+                wall_now.time_since_epoch()).count();
+            rec.q.assign(robot_state.q.begin(), robot_state.q.end());
+            rec.O_T_EE.assign(robot_state.O_T_EE.begin(),
+                              robot_state.O_T_EE.end());
+            recorded_states->push_back(std::move(rec));
+          }
+        }
 
         // Check if current waypoint is complete
         double waypoint_elapsed = control_time - waypoint_start_time;
@@ -677,12 +703,13 @@ msgpack::sbuffer handleExecuteTrajectory(
     it->second.convert(traj_req);
   }
 
-  bool success = server.ExecuteJointImpedanceTrajectory(traj_req);
+  std::vector<bamboo_msgs::StateRecord> recorded_states;
+  bool success = server.ExecuteJointImpedanceTrajectory(traj_req, recorded_states);
 
   msgpack::sbuffer response_buf;
   msgpack::packer<msgpack::sbuffer> packer(response_buf);
 
-  packer.pack_map(2);
+  packer.pack_map(3);
   packer.pack("success");
   packer.pack(success);
   packer.pack("error");
@@ -692,6 +719,8 @@ msgpack::sbuffer handleExecuteTrajectory(
   } else {
     packer.pack(std::string(""));
   }
+  packer.pack("recorded_states");
+  packer.pack(recorded_states);
 
   return response_buf;
 }

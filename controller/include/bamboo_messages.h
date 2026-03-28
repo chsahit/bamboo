@@ -35,4 +35,13 @@ struct TrajectoryRequest {
 
   MSGPACK_DEFINE_MAP(waypoints, default_duration, default_velocity)
 };
+
+// Timestamped state snapshot recorded during trajectory execution
+struct StateRecord {
+  double time_sec;              // Wall-clock time (seconds since epoch)
+  std::vector<double> q;        // Joint positions (7)
+  std::vector<double> O_T_EE;   // End-effector pose (16 - 4x4 column-major)
+
+  MSGPACK_DEFINE_MAP(time_sec, q, O_T_EE)
+};
 } // namespace bamboo_msgs

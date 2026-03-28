@@ -508,7 +508,10 @@ class BambooFrankaClient:
 
             if response.get("success", False):
                 _log.debug("Trajectory completed successfully")
-                return {"success": True}
+                result = {"success": True}
+                if "recorded_states" in response:
+                    result["recorded_states"] = response["recorded_states"]
+                return result
             else:
                 error_msg = response.get("error", "Trajectory execution failed")
                 _log.error(
